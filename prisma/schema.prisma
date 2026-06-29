@@ -1,0 +1,372 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN_INVOICING
+  MANAGEMENT
+  DIRECTOR
+}
+
+enum RecordStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ShipmentStatus {
+  DRAFT
+  READY_TO_GENERATE
+  INVOICED
+  COMPLETED
+  CANCELLED
+}
+
+enum ShipmentDirection {
+  EXPORT
+  IMPORT
+}
+
+enum ChargeCategory {
+  JASA
+  REIMBURSEMENT
+}
+
+enum InvoiceType {
+  JASA
+  REIMBURSEMENT
+}
+
+enum InvoiceStatus {
+  DRAFT
+  FINAL
+  SENT
+  PARTIAL_PAID
+  PAID
+  OVERDUE
+  CANCELLED
+  REVISED
+}
+
+enum FileType {
+  PDF
+  EXCEL
+  PAYMENT_PROOF
+}
+
+model User {
+  id           String        @id @default(cuid())
+  name         String
+  email        String        @unique
+  passwordHash String
+  role         Role          @default(ADMIN_INVOICING)
+  status       RecordStatus  @default(ACTIVE)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  shipments    Shipment[]    @relation("ShipmentCreator")
+  invoices     Invoice[]     @relation("InvoiceCreator")
+  approvals    Invoice[]     @relation("InvoiceApprover")
+  payments     Payment[]
+  activityLogs ActivityLog[]
+}
+
+model Client {
+  id              String       @id @default(cuid())
+  code            String       @unique
+  name            String
+  address         String
+  npwp            String?
+  email           String?
+  emailCc         String?
+  phone           String?
+  picName         String?
+  paymentTermDays Int          @default(30)
+  status          RecordStatus @default(ACTIVE)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  shipments       Shipment[]
+  invoices        Invoice[]
+}
+
+model Carrier {
+  id        String       @id @default(cuid())
+  code      String       @unique
+  name      String
+  status    RecordStatus @default(ACTIVE)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  shipments Shipment[]
+}
+
+model FieldTeam {
+  id        String       @id @default(cuid())
+  name      String       @unique
+  picName   String?
+  phone     String?
+  status    RecordStatus @default(ACTIVE)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  shipments Shipment[]
+  containers Container[]
+}
+
+model ChargeType {
+  id          String         @id @default(cuid())
+  name        String         @unique
+  category    ChargeCategory
+  description String?
+  status      RecordStatus   @default(ACTIVE)
+  charges     Charge[]
+}
+
+model Company {
+  id                String   @id @default(cuid())
+  name              String
+  address           String
+  npwp              String?
+  phone             String?
+  email             String?
+  logoPath          String?
+  signaturePath     String?
+  closingGreeting   String?
+  bankName          String?
+  bankAccountNumber String?
+  bankAccountName   String?
+  signerName        String?
+  signerTitle       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  invoices          Invoice[]
+  bankAccounts      CompanyBankAccount[]
+}
+
+model CompanyBankAccount {
+  id            String       @id @default(cuid())
+  companyId     String
+  bankName      String
+  accountNumber String
+  accountName   String
+  isPrimary     Boolean      @default(false)
+  status        RecordStatus @default(ACTIVE)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  company       Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model TaxRate {
+  id            String   @id @default(cuid())
+  name          String
+  rate          Decimal  @db.Decimal(5, 2)
+  effectiveDate DateTime
+  active        Boolean  @default(false)
+  createdAt     DateTime @default(now())
+}
+
+model InvoiceSequence {
+  id          String      @id @default(cuid())
+  invoiceType InvoiceType
+  year        Int
+  month       Int
+  lastNumber  Int         @default(0)
+  updatedAt   DateTime    @updatedAt
+
+  @@unique([invoiceType, year, month])
+}
+
+model Shipment {
+  id          String          @id @default(cuid())
+  jobNumber   String          @unique
+  clientId    String
+  carrierId   String?
+  vessel      String
+  voyage      String
+  shipmentDirection ShipmentDirection @default(EXPORT)
+  doNumber    String
+  shipmentDate DateTime
+  etaDate     DateTime?
+  etdDate     DateTime?
+  fieldTeamId String?
+  internalPic String?
+  advanceDpAmount Decimal       @default(0) @db.Decimal(18, 2)
+  advanceDpDate   DateTime?
+  advanceDpMethod String?
+  advanceDpReference String?
+  advanceDpNotes  String?
+  notes       String?
+  status      ShipmentStatus  @default(DRAFT)
+  createdById String
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  client      Client          @relation(fields: [clientId], references: [id])
+  carrier     Carrier?        @relation(fields: [carrierId], references: [id])
+  fieldTeam   FieldTeam?      @relation(fields: [fieldTeamId], references: [id])
+  createdBy   User            @relation("ShipmentCreator", fields: [createdById], references: [id])
+  bills       BillOfLading[]
+  containers  Container[]
+  charges     Charge[]
+  invoices    Invoice[]
+}
+
+model BillOfLading {
+  id         String      @id @default(cuid())
+  shipmentId String
+  number     String
+  notes      String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  shipment   Shipment    @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  containers Container[]
+  charges    Charge[]
+  invoices   Invoice[]
+
+  @@unique([shipmentId, number])
+}
+
+model Container {
+  id           String         @id @default(cuid())
+  shipmentId   String
+  billId       String
+  number       String
+  size         String
+  type         String
+  fieldTeamId  String?
+  status       String         @default("ACTIVE")
+  notes        String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  shipment     Shipment       @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  bill         BillOfLading   @relation(fields: [billId], references: [id], onDelete: Cascade)
+  fieldTeam    FieldTeam?     @relation(fields: [fieldTeamId], references: [id])
+
+  @@unique([shipmentId, number])
+}
+
+model Charge {
+  id          String         @id @default(cuid())
+  shipmentId  String
+  billId      String?
+  chargeTypeId String?
+  name        String
+  description String?
+  category    ChargeCategory
+  quantity    Decimal        @db.Decimal(12, 2)
+  unitPrice   Decimal        @db.Decimal(18, 2)
+  subtotal    Decimal        @db.Decimal(18, 2)
+  taxRate     Decimal        @db.Decimal(5, 2)
+  taxAmount   Decimal        @db.Decimal(18, 2)
+  totalAmount Decimal        @db.Decimal(18, 2)
+  notes       String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  shipment    Shipment       @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  bill        BillOfLading?  @relation(fields: [billId], references: [id])
+  chargeType  ChargeType?    @relation(fields: [chargeTypeId], references: [id])
+  invoiceItems InvoiceItem[]
+}
+
+model Invoice {
+  id                 String        @id @default(cuid())
+  invoiceNumber      String?       @unique
+  draftNumber        String        @unique
+  type               InvoiceType
+  companyId          String
+  shipmentId         String
+  billId             String?
+  clientId           String
+  invoiceDate        DateTime
+  dueDate            DateTime
+  subtotal           Decimal       @db.Decimal(18, 2)
+  taxRate            Decimal       @db.Decimal(5, 2)
+  taxAmount          Decimal       @db.Decimal(18, 2)
+  grandTotal         Decimal       @db.Decimal(18, 2)
+  amountPaid         Decimal       @default(0) @db.Decimal(18, 2)
+  outstandingAmount  Decimal       @db.Decimal(18, 2)
+  amountInWords      String
+  status             InvoiceStatus @default(DRAFT)
+  originalInvoiceId  String?
+  createdById        String
+  approvedById       String?
+  approvedAt         DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  company            Company       @relation(fields: [companyId], references: [id])
+  shipment           Shipment      @relation(fields: [shipmentId], references: [id])
+  bill               BillOfLading? @relation(fields: [billId], references: [id])
+  client             Client        @relation(fields: [clientId], references: [id])
+  createdBy          User          @relation("InvoiceCreator", fields: [createdById], references: [id])
+  approvedBy         User?         @relation("InvoiceApprover", fields: [approvedById], references: [id])
+  originalInvoice    Invoice?      @relation("InvoiceRevision", fields: [originalInvoiceId], references: [id])
+  revisions          Invoice[]     @relation("InvoiceRevision")
+  items              InvoiceItem[]
+  payments           Payment[]
+  generatedFiles     GeneratedFile[]
+
+  @@index([status, dueDate])
+  @@index([clientId, invoiceDate])
+}
+
+model InvoiceItem {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  chargeId    String?
+  description String
+  quantity    Decimal  @db.Decimal(12, 2)
+  unitPrice   Decimal  @db.Decimal(18, 2)
+  subtotal    Decimal  @db.Decimal(18, 2)
+  taxAmount   Decimal  @db.Decimal(18, 2)
+  totalAmount Decimal  @db.Decimal(18, 2)
+  createdAt   DateTime @default(now())
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  charge      Charge?  @relation(fields: [chargeId], references: [id])
+}
+
+model Payment {
+  id            String   @id @default(cuid())
+  invoiceId     String
+  paymentDate   DateTime
+  amount        Decimal  @db.Decimal(18, 2)
+  method        String
+  bankReference String?
+  proofFilePath String?
+  notes         String?
+  createdById   String
+  createdAt     DateTime @default(now())
+  invoice       Invoice  @relation(fields: [invoiceId], references: [id])
+  createdBy     User     @relation(fields: [createdById], references: [id])
+}
+
+model GeneratedFile {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  type        FileType
+  path        String
+  generatedAt DateTime @default(now())
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+model ActivityLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  module      String
+  action      String
+  referenceId String?
+  oldValue    Json?
+  newValue    Json?
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+  user        User?    @relation(fields: [userId], references: [id])
+
+  @@index([module, createdAt])
+}
+
+model AppSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}
