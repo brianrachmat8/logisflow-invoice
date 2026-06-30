@@ -31,7 +31,7 @@ async function redirectToCompany(companyId: string) {
   redirect(`/settings?companyId=${companyId}`);
 }
 
-export default async function SettingsPage({ searchParams }: { searchParams?: Promise<SettingsSearchParams> | SettingsSearchParams }) {
+export default async function SettingsPage({ searchParams }: { searchParams?: Promise<SettingsSearchParams> }) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const [companies, taxes] = await Promise.all([
     db.company.findMany({
