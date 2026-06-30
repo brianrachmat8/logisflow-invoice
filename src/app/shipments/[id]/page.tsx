@@ -25,6 +25,7 @@ export default async function ShipmentDetailPage({ params }: { params: Promise<{
   });
   if (!shipment) notFound();
 
+  const isOtherOrder = shipment.shipmentDirection === "LAIN_LAIN";
   const totalJasa = shipment.charges.filter((charge) => charge.category === "JASA").reduce((sum, charge) => sum + numberValue(charge.totalAmount), 0);
   const totalReimb = shipment.charges.filter((charge) => charge.category === "REIMBURSEMENT").reduce((sum, charge) => sum + numberValue(charge.totalAmount), 0);
   const advanceDpAmount = numberValue(shipment.advanceDpAmount);
@@ -38,21 +39,21 @@ export default async function ShipmentDetailPage({ params }: { params: Promise<{
       <div>
         <StatusBadge status={shipment.status} />
         <h2 style={{ marginTop: 12 }}>{shipment.jobNumber}</h2>
-        <p>{shipment.client.name} · {shipment.shipmentDirection === "EXPORT" ? "DO Number (Export)" : "B/L Number (Import)"} {shipment.doNumber}</p>
+        <p>{shipment.client.name} · {orderLabel(shipment.shipmentDirection)} · {documentLabel(shipment.shipmentDirection)} {shipment.doNumber}</p>
         <div className="detail-meta">
-          <div><span>Vessel / Voyage</span><strong>{shipment.vessel} / {shipment.voyage}</strong></div>
+          <div><span>{isOtherOrder ? "Pekerjaan / Kode" : "Vessel / Voyage"}</span><strong>{shipment.vessel} / {shipment.voyage}</strong></div>
           <div><span>Carrier</span><strong>{shipment.carrier?.name || "-"}</strong></div>
           <div><span>Tanggal</span><strong>{tanggal.format(shipment.shipmentDate)}</strong></div>
           <div><span>Tim lapangan</span><strong>{shipment.fieldTeam?.name || "-"}</strong></div>
-          <div><span>Size kontainer</span><strong>{summarizeContainerSizes(shipment.bills.flatMap((bill) => bill.containers))}</strong></div>
+          <div><span>{isOtherOrder ? "Jenis order" : "Size kontainer"}</span><strong>{isOtherOrder ? "Lain-lain" : summarizeContainerSizes(shipment.bills.flatMap((bill) => bill.containers))}</strong></div>
         </div>
       </div>
-      {!hasLockedInvoice && <GenerateInvoicePanel shipmentId={id} hasDraft={hasDraft} />}
+      {!hasLockedInvoice && <GenerateInvoicePanel shipmentId={id} hasDraft={hasDraft} isOtherOrder={isOtherOrder} />}
     </div>
 
     <section className="metrics">
-      <MiniMetric label="Bill of Lading" value={`${shipment.bills.length}`} icon={<FileText />} />
-      <MiniMetric label="Kontainer" value={`${shipment.bills.reduce((sum, bill) => sum + bill.containers.length, 0)}`} icon={<Box />} />
+      <MiniMetric label={isOtherOrder ? "Referensi" : "Bill of Lading"} value={isOtherOrder ? shipment.doNumber : `${shipment.bills.length}`} icon={<FileText />} />
+      <MiniMetric label={isOtherOrder ? "Jenis order" : "Kontainer"} value={isOtherOrder ? "Lain-lain" : `${shipment.bills.reduce((sum, bill) => sum + bill.containers.length, 0)}`} icon={<Box />} />
       <MiniMetric label="Total JASA" value={rupiah.format(totalJasa)} icon={<Ship />} />
       <MiniMetric label="Reimbursement" value={rupiah.format(totalReimb)} icon={<WalletCards />} />
     </section>
@@ -60,6 +61,7 @@ export default async function ShipmentDetailPage({ params }: { params: Promise<{
     <ShipmentWorkspace
       shipmentId={id}
       bills={bills}
+      isOtherOrder={isOtherOrder}
       advanceDp={{
         amount: advanceDpAmount,
         paymentDate: shipment.advanceDpDate ? shipment.advanceDpDate.toISOString().slice(0, 10) : "",
@@ -70,7 +72,7 @@ export default async function ShipmentDetailPage({ params }: { params: Promise<{
     />
 
     <div className="section-grid">
-      <div className="card">
+      {!isOtherOrder && <div className="card">
         <div className="card-head"><h3>B/L dan kontainer</h3></div>
         <div className="table-wrap">
           <table>
@@ -86,7 +88,7 @@ export default async function ShipmentDetailPage({ params }: { params: Promise<{
             </tbody>
           </table>
         </div>
-      </div>
+      </div>}
 
       <div className="card">
         <div className="card-head"><h3>Ringkasan biaya</h3></div>
@@ -123,12 +125,12 @@ export default async function ShipmentDetailPage({ params }: { params: Promise<{
       <div className="card-head"><h3>Invoice hasil generate</h3></div>
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Nomor</th><th>Tipe</th><th>B/L Number (Impor)</th><th>Total</th><th>Status</th><th>Aksi</th></tr></thead>
+          <thead><tr><th>Nomor</th><th>Tipe</th><th>{isOtherOrder ? "Referensi" : "B/L Number (Impor)"}</th><th>Total</th><th>Status</th><th>Aksi</th></tr></thead>
           <tbody>
             {shipment.invoices.map((invoice) => <tr key={invoice.id}>
               <td>{invoice.invoiceNumber || invoice.draftNumber}</td>
               <td>{invoice.type}</td>
-              <td>{invoice.bill?.number || "Gabungan"}</td>
+              <td>{isOtherOrder ? shipment.doNumber : invoice.bill?.number || "Gabungan"}</td>
               <td>{rupiah.format(numberValue(invoice.grandTotal))}</td>
               <td><StatusBadge status={invoice.status} /></td>
               <td><a className="btn btn-secondary" href={`/invoices/${invoice.id}`}>Buka</a></td>
@@ -142,6 +144,18 @@ export default async function ShipmentDetailPage({ params }: { params: Promise<{
 
 function MiniMetric({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) {
   return <div className="metric"><div className="metric-top"><div><div className="metric-label">{label}</div><div className="metric-value">{value}</div></div><span className="metric-icon">{icon}</span></div></div>;
+}
+
+function orderLabel(direction: string) {
+  if (direction === "EXPORT") return "Export";
+  if (direction === "IMPORT") return "Import";
+  return "Lain-lain";
+}
+
+function documentLabel(direction: string) {
+  if (direction === "EXPORT") return "DO Number (Export)";
+  if (direction === "IMPORT") return "B/L Number (Import)";
+  return "Referensi";
 }
 
 function summarizeContainerSizes(containers: { size: string }[]) {

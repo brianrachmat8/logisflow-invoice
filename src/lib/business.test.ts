@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agingBucket, calculateCharge, invoiceNumber, previewSplit, terbilang } from "./business";
+import { agingBucket, allocateAdvanceDp, calculateCharge, invoiceNumber, previewSplit, terbilang } from "./business";
 
 describe("perhitungan invoice", () => {
   it("menghitung JASA dengan PPN", () => {
@@ -22,8 +22,25 @@ describe("perhitungan invoice", () => {
     expect(result.reimbursement).toHaveLength(1);
     expect(result.reimbursement[0].grandTotal).toBe(9_000_000);
   });
-  it("menolak JASA tanpa B/L", () => {
+  it("menolak JASA tanpa B/L saat mode split per B/L", () => {
     expect(() => previewSplit([{ name: "Trucking", category: "JASA", quantity: 1, unitPrice: 1, taxRate: 11 }])).toThrow(/B\/L/);
+  });
+  it("mengizinkan JASA tanpa B/L saat mode gabungan", () => {
+    const result = previewSplit([
+      { name: "Handling dokumen", category: "JASA", quantity: 1, unitPrice: 500_000, taxRate: 11 },
+    ], "combine_jasa");
+    expect(result.jasa).toHaveLength(1);
+    expect(result.jasa[0].billId).toBeNull();
+  });
+  it("membagi DP secara proporsional untuk dua invoice", () => {
+    expect(allocateAdvanceDp([1_000_000, 3_000_000], 2_000_000)).toEqual([500_000, 1_500_000]);
+  });
+  it("membuat semua invoice lunas ketika DP sama dengan total tagihan", () => {
+    const grandTotals = [1_250_000, 2_750_000];
+    expect(allocateAdvanceDp(grandTotals, 4_000_000)).toEqual(grandTotals);
+  });
+  it("menaruh selisih pembulatan DP ke invoice terakhir", () => {
+    expect(allocateAdvanceDp([1, 1, 1], 1)).toEqual([0.33, 0.33, 0.34]);
   });
 });
 

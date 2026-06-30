@@ -30,6 +30,7 @@ enum ShipmentStatus {
 enum ShipmentDirection {
   EXPORT
   IMPORT
+  LAIN_LAIN
 }
 
 enum ChargeCategory {

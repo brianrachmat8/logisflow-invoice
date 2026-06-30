@@ -2,7 +2,7 @@ import { Prisma, type InvoiceStatus, type InvoiceType } from "@prisma/client";
 import { addDays } from "date-fns";
 import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
-import { invoiceNumber, type InvoiceSplitMode, previewSplit, terbilang } from "@/lib/business";
+import { allocateAdvanceDp, invoiceNumber, type InvoiceSplitMode, previewSplit, roundMoney, terbilang } from "@/lib/business";
 import { generateInvoiceDocuments } from "@/lib/documents";
 
 export async function getShipmentForInvoice(shipmentId: string) {
@@ -24,6 +24,7 @@ export async function previewShipmentInvoice(shipmentId: string, mode: InvoiceSp
   const shipment = await getShipmentForInvoice(shipmentId);
   if (!shipment) throw new Error("Shipment tidak ditemukan.");
   validateShipment(shipment, { allowDraftInvoices: true });
+  const effectiveMode: InvoiceSplitMode = shipment.shipmentDirection === "LAIN_LAIN" ? "combine_jasa" : mode;
   return {
     shipment,
     split: previewSplit(
@@ -38,7 +39,7 @@ export async function previewShipmentInvoice(shipmentId: string, mode: InvoiceSp
         unitPrice: charge.unitPrice.toNumber(),
         taxRate: charge.taxRate.toNumber(),
       })),
-      mode,
+      effectiveMode,
     ),
   };
 }
@@ -47,12 +48,13 @@ function validateShipment(
   shipment: NonNullable<Awaited<ReturnType<typeof getShipmentForInvoice>>>,
   options: { allowDraftInvoices?: boolean } = {},
 ) {
+  const isOtherOrder = shipment.shipmentDirection === "LAIN_LAIN";
   if (shipment.status === "CANCELLED") throw new Error("Shipment telah dibatalkan.");
-  if (!shipment.doNumber) throw new Error("Nomor DO wajib diisi.");
-  if (!shipment.bills.length) throw new Error("Minimal satu B/L wajib tersedia.");
-  if (!shipment.containers.length) throw new Error("Minimal satu kontainer wajib tersedia.");
+  if (!shipment.doNumber) throw new Error(isOtherOrder ? "Nomor referensi wajib diisi." : "Nomor DO wajib diisi.");
+  if (!isOtherOrder && !shipment.bills.length) throw new Error("Minimal satu B/L wajib tersedia.");
+  if (!isOtherOrder && !shipment.containers.length) throw new Error("Minimal satu kontainer wajib tersedia.");
   if (!shipment.charges.length) throw new Error("Minimal satu biaya wajib tersedia.");
-  if (shipment.charges.some((charge) => charge.category === "JASA" && !charge.billId)) {
+  if (!isOtherOrder && shipment.charges.some((charge) => charge.category === "JASA" && !charge.billId)) {
     throw new Error("Semua biaya JASA wajib terkait dengan B/L.");
   }
   const activeInvoices = shipment.invoices.filter((invoice) => invoice.status !== "CANCELLED" && invoice.status !== "REVISED");
@@ -70,8 +72,9 @@ export async function generateDraftInvoices(
   userId: string,
   options: { mode?: InvoiceSplitMode; replaceDraft?: boolean; action?: string } = {},
 ) {
-  const mode = options.mode ?? "split_by_bl";
-  const { shipment, split } = await previewShipmentInvoice(shipmentId, mode);
+  const requestedMode = options.mode ?? "split_by_bl";
+  const { shipment, split } = await previewShipmentInvoice(shipmentId, requestedMode);
+  const mode: InvoiceSplitMode = shipment.shipmentDirection === "LAIN_LAIN" ? "combine_jasa" : requestedMode;
   const company = await db.company.findFirst();
   if (!company) throw new Error("Identitas perusahaan belum dikonfigurasi.");
   const groups = [...split.jasa, ...split.reimbursement];
@@ -81,6 +84,7 @@ export async function generateDraftInvoices(
   if (advanceDpAmount > totalGrand) {
     throw new Error("DP/lunas awal lebih besar dari total biaya yang sudah diinput. Tambahkan semua biaya terlebih dahulu atau cek kembali nominal pembayaran.");
   }
+  const advanceDpAllocations = allocateAdvanceDp(groups.map((group) => group.grandTotal), advanceDpAmount);
 
   return db.$transaction(async (tx) => {
     const existing = await tx.invoice.findMany({
@@ -96,12 +100,10 @@ export async function generateDraftInvoices(
     }
 
     const invoices = [];
-    let remainingAdvanceDp = advanceDpAmount;
     for (const [index, group] of groups.entries()) {
       const draftNumber = `DRAFT/${now.getFullYear()}/${shipment.jobNumber}/${String(index + 1).padStart(2, "0")}`;
-      const paidFromAdvanceDp = Math.min(remainingAdvanceDp, group.grandTotal);
-      remainingAdvanceDp -= paidFromAdvanceDp;
-      const outstandingAmount = group.grandTotal - paidFromAdvanceDp;
+      const paidFromAdvanceDp = advanceDpAllocations[index] ?? 0;
+      const outstandingAmount = roundMoney(group.grandTotal - paidFromAdvanceDp);
       const invoice = await tx.invoice.create({
         data: {
           draftNumber,
@@ -143,7 +145,7 @@ export async function generateDraftInvoices(
         module: "INVOICE",
         action: options.action ?? (existing.length ? "REGENERATE_DRAFT" : "GENERATE_DRAFT"),
         referenceId: shipmentId,
-        newValue: { invoiceIds: invoices.map((invoice) => invoice.id), count: invoices.length, mode },
+        newValue: { invoiceIds: invoices.map((invoice) => invoice.id), count: invoices.length, mode, advanceDpAmount },
       },
       tx,
     );
@@ -154,13 +156,14 @@ export async function generateDraftInvoices(
 export async function syncDraftInvoicesForShipment(shipmentId: string, userId: string) {
   const drafts = await db.invoice.findMany({
     where: { shipmentId, status: { notIn: ["CANCELLED", "REVISED"] } },
-    select: { type: true, billId: true, status: true },
+    select: { type: true, billId: true, status: true, shipment: { select: { shipmentDirection: true } } },
   });
   if (!drafts.length) return null;
   if (drafts.some((invoice) => invoice.status !== "DRAFT")) return null;
 
+  const isOtherOrder = drafts[0]?.shipment.shipmentDirection === "LAIN_LAIN";
   const jasaDrafts = drafts.filter((invoice) => invoice.type === "JASA");
-  const mode: InvoiceSplitMode = jasaDrafts.length === 1 && !jasaDrafts[0]?.billId ? "combine_jasa" : "split_by_bl";
+  const mode: InvoiceSplitMode = isOtherOrder || (jasaDrafts.length === 1 && !jasaDrafts[0]?.billId) ? "combine_jasa" : "split_by_bl";
   return generateDraftInvoices(shipmentId, userId, {
     mode,
     replaceDraft: true,

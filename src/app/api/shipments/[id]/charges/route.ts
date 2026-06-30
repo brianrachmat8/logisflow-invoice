@@ -47,13 +47,22 @@ async function assertChargeCanChange(shipmentId: string, chargeId: string) {
   return { charge };
 }
 
+async function getShipmentDirection(shipmentId: string) {
+  const shipment = await db.shipment.findUnique({ where: { id: shipmentId }, select: { shipmentDirection: true } });
+  if (!shipment) return null;
+  return shipment.shipmentDirection;
+}
+
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireUser(["SUPER_ADMIN", "ADMIN_INVOICING"]);
   if (access.error) return access.error;
   try {
     const { id } = await params;
     const input = schema.parse(await request.json());
-    if (input.category === "JASA" && !input.billId) return fail("Biaya JASA wajib terkait dengan B/L.", 422);
+    const shipmentDirection = await getShipmentDirection(id);
+    if (!shipmentDirection) return fail("Shipment tidak ditemukan.", 404);
+    const isOtherOrder = shipmentDirection === "LAIN_LAIN";
+    if (!isOtherOrder && input.category === "JASA" && !input.billId) return fail("Biaya JASA wajib terkait dengan B/L.", 422);
     const tax = input.category === "JASA"
       ? await db.taxRate.findFirst({ where: { active: true }, orderBy: { effectiveDate: "desc" } })
       : null;
@@ -117,7 +126,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const editable = await assertChargeCanChange(id, input.id);
     if (editable.error) return editable.error;
 
-    if (input.category === "JASA" && !input.billId) return fail("Biaya JASA wajib terkait dengan B/L.", 422);
+    const shipmentDirection = await getShipmentDirection(id);
+    if (!shipmentDirection) return fail("Shipment tidak ditemukan.", 404);
+    const isOtherOrder = shipmentDirection === "LAIN_LAIN";
+    if (!isOtherOrder && input.category === "JASA" && !input.billId) return fail("Biaya JASA wajib terkait dengan B/L.", 422);
     const tax = input.category === "JASA"
       ? await db.taxRate.findFirst({ where: { active: true }, orderBy: { effectiveDate: "desc" } })
       : null;

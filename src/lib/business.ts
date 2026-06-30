@@ -25,11 +25,11 @@ export function previewSplit(charges: ChargeInput[], mode: InvoiceSplitMode = "s
   const reimbursement: ChargeInput[] = [];
   for (const charge of charges) {
     if (charge.category === "JASA") {
-      if (!charge.billId) throw new Error(`Biaya JASA "${charge.name}" belum terkait B/L.`);
       if (mode === "combine_jasa") {
         combinedJasa.push(charge);
         continue;
       }
+      if (!charge.billId) throw new Error(`Biaya JASA "${charge.name}" belum terkait B/L.`);
       const group = jasa.get(charge.billId) ?? [];
       group.push(charge);
       jasa.set(charge.billId, group);
@@ -65,6 +65,32 @@ function summarizeGroup(type: "JASA" | "REIMBURSEMENT", billId: string | null, i
 
 export function roundMoney(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+export function allocateAdvanceDp(grandTotals: number[], advanceDpAmount: number) {
+  const normalizedTotals = grandTotals.map((total) => roundMoney(Math.max(total, 0)));
+  const totalGrand = roundMoney(normalizedTotals.reduce((sum, total) => sum + total, 0));
+  const cappedAdvanceDp = roundMoney(Math.min(Math.max(advanceDpAmount, 0), totalGrand));
+  const lastPayableIndex = normalizedTotals.reduce((lastIndex, total, index) => total > 0 ? index : lastIndex, -1);
+
+  if (!normalizedTotals.length || cappedAdvanceDp <= 0 || totalGrand <= 0 || lastPayableIndex === -1) {
+    return normalizedTotals.map(() => 0);
+  }
+
+  let allocated = 0;
+  return normalizedTotals.map((grandTotal, index) => {
+    if (grandTotal <= 0) return 0;
+
+    const remainingAdvanceDp = roundMoney(cappedAdvanceDp - allocated);
+    if (index === lastPayableIndex) {
+      return roundMoney(Math.min(grandTotal, remainingAdvanceDp));
+    }
+
+    const proportionalShare = roundMoney((grandTotal / totalGrand) * cappedAdvanceDp);
+    const paid = roundMoney(Math.min(grandTotal, proportionalShare, remainingAdvanceDp));
+    allocated = roundMoney(allocated + paid);
+    return paid;
+  });
 }
 
 export function agingBucket(dueDate: Date, now = new Date()) {

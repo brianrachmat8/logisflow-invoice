@@ -34,10 +34,20 @@ async function post(endpoint: string, data: unknown) {
   return payload.data;
 }
 
-export function ShipmentWorkspace({ shipmentId, bills, advanceDp }: { shipmentId: string; bills: Bill[]; advanceDp?: AdvanceDp }) {
+export function ShipmentWorkspace({
+  shipmentId,
+  bills,
+  advanceDp,
+  isOtherOrder = false,
+}: {
+  shipmentId: string;
+  bills: Bill[];
+  advanceDp?: AdvanceDp;
+  isOtherOrder?: boolean;
+}) {
   const router = useRouter();
   const [message, setMessage] = useState("");
-  const [mode, setMode] = useState<"bill" | "container" | "charge">("bill");
+  const [mode, setMode] = useState<"bill" | "container" | "charge">(isOtherOrder ? "charge" : "bill");
   const [dpMode, setDpMode] = useState<"NO_DP" | "WITH_DP">("NO_DP");
   const [unitPrice, setUnitPrice] = useState("");
   const [advanceDpAmount, setAdvanceDpAmount] = useState("");
@@ -74,12 +84,14 @@ export function ShipmentWorkspace({ shipmentId, bills, advanceDp }: { shipmentId
   return (
     <div className="card">
       <div className="tabs">
-        <button className={`tab ${mode === "bill" ? "active" : ""}`} onClick={() => setMode("bill")}><Plus size={14} /> Tambah B/L</button>
-        <button className={`tab ${mode === "container" ? "active" : ""}`} onClick={() => setMode("container")}><Upload size={14} /> Paste Kontainer</button>
+        {!isOtherOrder && <>
+          <button className={`tab ${mode === "bill" ? "active" : ""}`} onClick={() => setMode("bill")}><Plus size={14} /> Tambah B/L</button>
+          <button className={`tab ${mode === "container" ? "active" : ""}`} onClick={() => setMode("container")}><Upload size={14} /> Paste Kontainer</button>
+        </>}
         <button className={`tab ${mode === "charge" ? "active" : ""}`} onClick={() => setMode("charge")}><Plus size={14} /> Tambah Biaya</button>
       </div>
       <form className="card-body" onSubmit={handle}>
-        {mode === "bill" && (
+        {mode === "bill" && !isOtherOrder && (
           <div className="grid-equal">
             <div className="field">
               <label>B/L Number (Impor) *</label>
@@ -89,7 +101,7 @@ export function ShipmentWorkspace({ shipmentId, bills, advanceDp }: { shipmentId
             <div className="field"><label>Catatan</label><input name="notes" placeholder="Opsional" /></div>
           </div>
         )}
-        {mode === "container" && (
+        {mode === "container" && !isOtherOrder && (
           <>
             <div className="grid-equal">
               <div className="field"><label>B/L *</label><select name="billId" required defaultValue=""><option value="" disabled>Pilih B/L</option>{bills.map((b) => <option value={b.id} key={b.id}>{b.number}</option>)}</select></div>
@@ -102,9 +114,9 @@ export function ShipmentWorkspace({ shipmentId, bills, advanceDp }: { shipmentId
         {mode === "charge" && (
           <>
             <div className="grid-equal">
-              <div className="field"><label>Nama biaya *</label><input name="name" required placeholder="Trucking" /></div>
+              <div className="field"><label>Nama biaya *</label><input name="name" required placeholder={isOtherOrder ? "Jasa handling dokumen" : "Trucking"} /></div>
               <div className="field"><label>Kategori *</label><select name="category" defaultValue="JASA"><option value="JASA">JASA</option><option value="REIMBURSEMENT">REIMBURSEMENT</option></select></div>
-              <div className="field"><label>Terkait B/L</label><select name="billId" defaultValue=""><option value="">Level shipment</option>{bills.map((b) => <option value={b.id} key={b.id}>{b.number}</option>)}</select></div>
+              {!isOtherOrder && <div className="field"><label>Terkait B/L</label><select name="billId" defaultValue=""><option value="">Level shipment</option>{bills.map((b) => <option value={b.id} key={b.id}>{b.number}</option>)}</select></div>}
               <div className="field"><label>Deskripsi</label><input name="description" /></div>
               <div className="field"><label>Quantity *</label><input name="quantity" type="number" min="0.01" step="0.01" required /></div>
               <div className="field">
