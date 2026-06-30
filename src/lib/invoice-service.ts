@@ -236,6 +236,49 @@ export async function finalizeInvoice(invoiceId: string, userId: string) {
   return finalized;
 }
 
+export async function cancelInvoice(invoiceId: string, userId: string) {
+  return db.$transaction(async (tx) => {
+    const invoice = await tx.invoice.findUnique({
+      where: { id: invoiceId },
+      include: { payments: true, shipment: true },
+    });
+    if (!invoice) throw new Error("Invoice tidak ditemukan.");
+    if (!["FINAL", "SENT", "OVERDUE"].includes(invoice.status)) {
+      throw new Error("Hanya invoice final/sent/overdue tanpa pembayaran yang dapat dibatalkan.");
+    }
+    if (invoice.payments.length || invoice.amountPaid.toNumber() > 0) {
+      throw new Error("Invoice yang sudah memiliki pembayaran tidak dapat dibatalkan langsung.");
+    }
+
+    const cancelled = await tx.invoice.update({
+      where: { id: invoiceId },
+      data: { status: "CANCELLED" },
+    });
+    const remainingActiveInvoices = await tx.invoice.count({
+      where: {
+        shipmentId: invoice.shipmentId,
+        id: { not: invoiceId },
+        status: { notIn: ["CANCELLED", "REVISED"] },
+      },
+    });
+    if (remainingActiveInvoices === 0 && invoice.shipment.status === "INVOICED") {
+      await tx.shipment.update({ where: { id: invoice.shipmentId }, data: { status: "READY_TO_GENERATE" } });
+    }
+    await audit(
+      {
+        userId,
+        module: "INVOICE",
+        action: "CANCEL",
+        referenceId: invoiceId,
+        oldValue: { status: invoice.status, invoiceNumber: invoice.invoiceNumber },
+        newValue: { status: cancelled.status, shipmentStatusReset: remainingActiveInvoices === 0 && invoice.shipment.status === "INVOICED" },
+      },
+      tx,
+    );
+    return cancelled;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
 export async function recordPayment(
   invoiceId: string,
   userId: string,
