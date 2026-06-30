@@ -7,9 +7,11 @@ import { LoaderCircle } from "lucide-react";
 export function GenerateInvoicePanel({
   shipmentId,
   hasDraft,
+  isOtherOrder = false,
 }: {
   shipmentId: string;
   hasDraft: boolean;
+  isOtherOrder?: boolean;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<"split_by_bl" | "combine_jasa">("split_by_bl");
@@ -22,7 +24,7 @@ export function GenerateInvoicePanel({
     const response = await fetch(`/api/shipments/${shipmentId}/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode, replaceDraft: true }),
+      body: JSON.stringify({ mode: isOtherOrder ? "combine_jasa" : mode, replaceDraft: true }),
     });
     const payload = await response.json();
     setLoading(false);
@@ -36,13 +38,14 @@ export function GenerateInvoicePanel({
 
   return (
     <div className="generate-panel">
-      <div className="field">
+      {!isOtherOrder && <div className="field">
         <label>Mode invoice JASA</label>
         <select value={mode} onChange={(event) => setMode(event.target.value as "split_by_bl" | "combine_jasa")}>
           <option value="split_by_bl">Pisah: 1 invoice JASA per B/L</option>
           <option value="combine_jasa">Gabung: 1 invoice JASA untuk semua B/L</option>
         </select>
-      </div>
+      </div>}
+      {isOtherOrder && <small style={{ color: "var(--muted)" }}>Order Lain-lain otomatis digenerate sebagai invoice gabungan tanpa B/L.</small>}
       <button className="btn btn-primary" onClick={generate} disabled={loading}>
         {loading && <LoaderCircle size={16} className="spin" />}
         {loading ? "Memproses..." : hasDraft ? "Update draft invoice" : "Generate draft invoice"}
