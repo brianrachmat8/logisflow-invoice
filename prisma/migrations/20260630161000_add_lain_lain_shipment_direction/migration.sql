@@ -1,0 +1,1 @@
+ALTER TYPE "ShipmentDirection" ADD VALUE IF NOT EXISTS 'LAIN_LAIN';
