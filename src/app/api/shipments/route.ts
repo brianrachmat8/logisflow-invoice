@@ -6,9 +6,9 @@ import { audit } from "@/lib/audit";
 const schema = z.object({
   clientId: z.string().min(1),
   carrierId: z.string().optional().nullable(),
-  vessel: z.string().min(1),
-  voyage: z.string().min(1),
-  shipmentDirection: z.enum(["EXPORT", "IMPORT"]).default("EXPORT"),
+  vessel: z.string().optional(),
+  voyage: z.string().optional(),
+  shipmentDirection: z.enum(["EXPORT", "IMPORT", "LAIN_LAIN"]).default("EXPORT"),
   doNumber: z.string().min(1),
   shipmentDate: z.coerce.date(),
   fieldTeamId: z.string().optional().nullable(),
@@ -50,15 +50,26 @@ export async function POST(request: Request) {
   if (access.error) return access.error;
   try {
     const input = schema.parse(await request.json());
+    const isOtherOrder = input.shipmentDirection === "LAIN_LAIN";
+    if (!isOtherOrder && !input.vessel?.trim()) return fail("Vessel wajib diisi.", 422);
+    if (!isOtherOrder && !input.voyage?.trim()) return fail("Voyage wajib diisi.", 422);
+
     const count = await db.shipment.count({
       where: { createdAt: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) } },
     });
     const jobNumber = `JOB/${new Date().getFullYear()}/${String(new Date().getMonth() + 1).padStart(2, "0")}/${String(count + 1).padStart(4, "0")}`;
     const shipment = await db.shipment.create({
       data: {
-        ...input,
+        clientId: input.clientId,
         carrierId: input.carrierId || null,
+        vessel: isOtherOrder ? input.vessel?.trim() || "-" : input.vessel!.trim(),
+        voyage: isOtherOrder ? input.voyage?.trim() || "-" : input.voyage!.trim(),
+        shipmentDirection: input.shipmentDirection,
+        doNumber: input.doNumber.trim(),
+        shipmentDate: input.shipmentDate,
         fieldTeamId: input.fieldTeamId || null,
+        internalPic: input.internalPic,
+        notes: input.notes,
         jobNumber,
         createdById: access.user.id,
         bills: input.shipmentDirection === "IMPORT"
@@ -71,7 +82,7 @@ export async function POST(request: Request) {
       module: "SHIPMENT",
       action: "CREATE",
       referenceId: shipment.id,
-      newValue: { jobNumber },
+      newValue: { jobNumber, shipmentDirection: input.shipmentDirection },
     });
     return ok(shipment);
   } catch (error) {
