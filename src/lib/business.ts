@@ -126,8 +126,14 @@ export function terbilang(value: number) {
   return `${spell(Math.floor(Math.abs(value))).replace(/\s+/g, " ").trim()} Rupiah`;
 }
 
-export function invoiceNumber(type: "JASA" | "REIMBURSEMENT", date: Date, sequence: number) {
+export function invoiceDirectionCode(direction: "EXPORT" | "IMPORT" | "LAIN_LAIN") {
+  if (direction === "EXPORT") return "EXP";
+  if (direction === "IMPORT") return "IMP";
+  return "DLL";
+}
+
+export function invoiceNumber(prefix: string, date: Date, sequence: number) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
-  return `INV/${type === "JASA" ? "JASA" : "REIM"}/${year}/${month}/${String(sequence).padStart(4, "0")}`;
+  return `${prefix}/${year}/${month}/${String(sequence).padStart(4, "0")}`;
 }
