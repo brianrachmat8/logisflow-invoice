@@ -52,6 +52,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
           isPrimary: true,
         }]
       : [];
+  const canCancelInvoice = ["FINAL", "SENT", "OVERDUE"].includes(invoice.status) && paidAmount <= 0 && !invoice.payments.length;
 
   return <AppShell title="Detail invoice">
     <div className="page-head">
@@ -67,6 +68,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
       </div>
       <div className="actions">
         {invoice.status === "DRAFT" && <ActionButton endpoint={`/api/invoices/${id}/finalize`} label="Finalkan invoice" confirm="Invoice final tidak dapat diedit langsung. Lanjutkan?" />}
+        {canCancelInvoice && <ActionButton endpoint={`/api/invoices/${id}/cancel`} label="Batalkan invoice" className="btn btn-danger" confirm="Invoice akan dibatalkan, bukan dihapus. Nomor invoice tetap tersimpan untuk audit. Lanjutkan?" />}
         {invoice.invoiceNumber && <>
           <a className="btn btn-secondary" href={`/api/invoices/${id}/export/pdf`}><Download size={16}/> PDF</a>
           <a className="btn btn-secondary" href={`/api/invoices/${id}/export/xlsx`}><Download size={16}/> Excel</a>
