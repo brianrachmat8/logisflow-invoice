@@ -47,10 +47,11 @@ async function assertChargeCanChange(shipmentId: string, chargeId: string) {
   return { charge };
 }
 
-async function getShipmentDirection(shipmentId: string) {
-  const shipment = await db.shipment.findUnique({ where: { id: shipmentId }, select: { shipmentDirection: true } });
-  if (!shipment) return null;
-  return shipment.shipmentDirection;
+async function getShipmentBillingState(shipmentId: string) {
+  return db.shipment.findUnique({
+    where: { id: shipmentId },
+    select: { shipmentDirection: true, advanceDpAmount: true },
+  });
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -59,9 +60,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     const { id } = await params;
     const input = schema.parse(await request.json());
-    const shipmentDirection = await getShipmentDirection(id);
-    if (!shipmentDirection) return fail("Shipment tidak ditemukan.", 404);
-    const isOtherOrder = shipmentDirection === "LAIN_LAIN";
+    const shipment = await getShipmentBillingState(id);
+    if (!shipment) return fail("Shipment tidak ditemukan.", 404);
+    const isOtherOrder = shipment.shipmentDirection === "LAIN_LAIN";
     if (!isOtherOrder && input.category === "JASA" && !input.billId) return fail("Biaya JASA wajib terkait dengan B/L.", 422);
     const tax = input.category === "JASA"
       ? await db.taxRate.findFirst({ where: { active: true }, orderBy: { effectiveDate: "desc" } })
@@ -91,10 +92,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       },
     });
     if (input.advanceDpAmount && input.advanceDpAmount > 0) {
+      const previousAdvanceDp = shipment.advanceDpAmount.toNumber();
+      const nextAdvanceDp = previousAdvanceDp + input.advanceDpAmount;
       await db.shipment.update({
         where: { id },
         data: {
-          advanceDpAmount: new Prisma.Decimal(input.advanceDpAmount),
+          advanceDpAmount: new Prisma.Decimal(nextAdvanceDp),
           advanceDpDate: input.advanceDpDate ? new Date(input.advanceDpDate) : new Date(),
           advanceDpMethod: input.advanceDpMethod || "Transfer Bank",
           advanceDpReference: input.advanceDpReference || null,
@@ -104,9 +107,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       await audit({
         userId: access.user.id,
         module: "PAYMENT",
-        action: "SET_ADVANCE_DP",
+        action: "ADD_ADVANCE_DP",
         referenceId: id,
-        newValue: { amount: input.advanceDpAmount, method: input.advanceDpMethod || "Transfer Bank", reference: input.advanceDpReference || null },
+        newValue: {
+          amount: input.advanceDpAmount,
+          previousAdvanceDp,
+          totalAdvanceDp: nextAdvanceDp,
+          method: input.advanceDpMethod || "Transfer Bank",
+          reference: input.advanceDpReference || null,
+        },
       });
     }
     await audit({ userId: access.user.id, module: "CHARGE", action: "CREATE", referenceId: charge.id });
@@ -126,9 +135,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const editable = await assertChargeCanChange(id, input.id);
     if (editable.error) return editable.error;
 
-    const shipmentDirection = await getShipmentDirection(id);
-    if (!shipmentDirection) return fail("Shipment tidak ditemukan.", 404);
-    const isOtherOrder = shipmentDirection === "LAIN_LAIN";
+    const shipment = await getShipmentBillingState(id);
+    if (!shipment) return fail("Shipment tidak ditemukan.", 404);
+    const isOtherOrder = shipment.shipmentDirection === "LAIN_LAIN";
     if (!isOtherOrder && input.category === "JASA" && !input.billId) return fail("Biaya JASA wajib terkait dengan B/L.", 422);
     const tax = input.category === "JASA"
       ? await db.taxRate.findFirst({ where: { active: true }, orderBy: { effectiveDate: "desc" } })

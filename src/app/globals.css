@@ -192,7 +192,13 @@ tbody tr:hover { background: #fbfcff; box-shadow: 0 10px 24px rgba(11, 23, 57, .
 .inline-editor summary, .master-item summary { cursor: pointer; color: var(--blue); font-weight: 700; font-size: 12px; }
 .inline-editor[open], .master-item[open] { background: #fbfcff; }
 .edit-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 12px; align-items: end; }
-.charge-edit-form { position: absolute; right: 20px; z-index: 5; width: min(720px, calc(100vw - 80px)); padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: white; box-shadow: var(--shadow); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: end; }
+.charge-edit-row td { background: #f8faff; padding: 18px; }
+.charge-edit-row:hover { transform: none; box-shadow: none; }
+.charge-edit-form {
+  padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: white;
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: end;
+}
+.charge-edit-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .form-note { margin: 14px 20px 0; font-size: 13px; }
 .master-item { border: 1px solid var(--line); border-radius: 12px; padding: 13px; background: white; }
 .master-item summary { display: flex; justify-content: space-between; align-items: center; gap: 12px; color: var(--ink); list-style-position: inside; }
@@ -238,7 +244,6 @@ tbody tr:hover { background: #fbfcff; box-shadow: 0 10px 24px rgba(11, 23, 57, .
   .mobile-menu { display: grid; }
   .metrics, .grid-equal { grid-template-columns: 1fr; }
   .edit-grid, .charge-edit-form { grid-template-columns: 1fr; }
-  .charge-edit-form { left: 18px; right: 18px; width: auto; }
   .page-head { flex-direction: column; }
   .detail-hero { grid-template-columns: 1fr; }
 }

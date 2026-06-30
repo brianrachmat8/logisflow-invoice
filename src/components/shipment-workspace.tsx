@@ -133,26 +133,26 @@ export function ShipmentWorkspace({
             </div>
             <div className="card" style={{ marginTop: 18, background: "#f7f9fd" }}>
               <div className="card-body form-stack">
-                <strong>DP awal / uang muka</strong>
+                <strong>DP awal / pembayaran diterima</strong>
                 <p style={{ color: "var(--muted)", fontSize: 13, margin: 0 }}>
-                  Opsional. Isi di sini jika klien sudah bayar DP atau langsung lunas saat input biaya pertama. Nominal ini nanti otomatis mengurangi sisa tagihan invoice saat digenerate.
+                  Opsional. Isi nominal yang diterima untuk biaya ini. Jika sudah ada DP sebelumnya, nominal ini akan ditambahkan ke total DP tersimpan.
                 </p>
                 {advanceDp?.amount ? <div className="summary-line">
-                  <span>DP/lunas awal tersimpan</span>
+                  <span>Total DP/pembayaran tersimpan</span>
                   <strong>Rp {advanceDp.amount.toLocaleString("id-ID")}</strong>
                 </div> : null}
                 <div className="field">
                   <label>Pembayaran awal</label>
                   <select name="dpMode" value={dpMode} onChange={(event) => setDpMode(event.target.value as "NO_DP" | "WITH_DP")}>
                     <option value="NO_DP">Tanpa DP</option>
-                    <option value="WITH_DP">Ada DP / Lunas awal</option>
+                    <option value="WITH_DP">Ada DP / Paid</option>
                   </select>
-                  <small>Pilih “Ada DP / Lunas awal” hanya saat ingin mencatat pembayaran awal baru atau mengganti nominal yang tersimpan.</small>
+                  <small>Pilih “Ada DP / Paid” saat customer sudah membayar sebagian atau lunas untuk biaya yang sedang diinput.</small>
                 </div>
                 {dpMode === "WITH_DP" && <>
                   <div className="grid-equal">
                     <div className="field">
-                      <label>Nominal DP / lunas awal</label>
+                      <label>Nominal DP / paid</label>
                       <input
                         name="advanceDpAmount"
                         inputMode="numeric"
@@ -161,7 +161,7 @@ export function ShipmentWorkspace({
                         placeholder="Contoh: 1.900.000"
                         required
                       />
-                      <small>Titik ribuan otomatis ditambahkan. Jika customer sudah transfer lunas, isi nominal lunasnya di sini.</small>
+                      <small>Titik ribuan otomatis ditambahkan. Jika biaya ini sudah lunas, isi nominal sebesar total biaya ini.</small>
                     </div>
                     <div className="field"><label>Tanggal DP</label><input name="advanceDpDate" type="date" /></div>
                     <div className="field"><label>Metode DP</label><select name="advanceDpMethod" defaultValue="Transfer Bank"><option>Transfer Bank</option><option>Cash</option><option>Lainnya</option></select></div>
