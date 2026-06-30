@@ -14,10 +14,9 @@ export default async function InvoicesPage() {
     orderBy: { createdAt: "desc" },
   });
   return <AppShell title="Invoice">
-    <div className="page-head">
-      <PageHead title="Semua invoice" description="Review draft, finalisasi, dan unduh dokumen tagihan." />
+    <PageHead title="Semua invoice" description="Review draft, finalisasi, dan unduh dokumen tagihan.">
       <Link className="btn btn-primary" href="/invoices/manual/new"><Plus size={16} /> Invoice Lain-lain</Link>
-    </div>
+    </PageHead>
     <div className="card">
       <div className="filters"><input className="filter-input search" placeholder="Cari nomor invoice atau klien..." /><select className="filter-input"><option>Semua tipe</option><option>JASA</option><option>REIMBURSEMENT</option><option>LAIN-LAIN</option></select><select className="filter-input"><option>Semua status</option></select></div>
       <div className="table-wrap"><table><thead><tr><th>Nomor invoice</th><th>Klien</th><th>Job / Referensi</th><th>Tanggal</th><th>Tipe</th><th>Total</th><th>Status</th></tr></thead><tbody>
