@@ -25,11 +25,11 @@ export function previewSplit(charges: ChargeInput[], mode: InvoiceSplitMode = "s
   const reimbursement: ChargeInput[] = [];
   for (const charge of charges) {
     if (charge.category === "JASA") {
-      if (!charge.billId) throw new Error(`Biaya JASA "${charge.name}" belum terkait B/L.`);
       if (mode === "combine_jasa") {
         combinedJasa.push(charge);
         continue;
       }
+      if (!charge.billId) throw new Error(`Biaya JASA "${charge.name}" belum terkait B/L.`);
       const group = jasa.get(charge.billId) ?? [];
       group.push(charge);
       jasa.set(charge.billId, group);
