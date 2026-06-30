@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, Fragment, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type Bill = { id: string; number: string };
@@ -47,6 +47,7 @@ async function request(endpoint: string, method: "PATCH" | "DELETE", data: unkno
 export function ChargeManager({ shipmentId, bills, charges }: { shipmentId: string; bills: Bill[]; charges: Charge[] }) {
   const router = useRouter();
   const [message, setMessage] = useState("");
+  const [editingChargeId, setEditingChargeId] = useState<string | null>(null);
   const [prices, setPrices] = useState<Record<string, string>>(() =>
     Object.fromEntries(charges.map((charge) => [charge.id, formatMoneyInput(charge.unitPrice)])),
   );
@@ -63,6 +64,7 @@ export function ChargeManager({ shipmentId, bills, charges }: { shipmentId: stri
         unitPrice: parseMoneyInput(raw.unitPrice),
       });
       setPrices((current) => ({ ...current, [String(raw.id)]: formatMoneyInput(parseMoneyInput(raw.unitPrice)) }));
+      setEditingChargeId(null);
       setMessage("Biaya berhasil diubah.");
       router.refresh();
     } catch (error) {
@@ -91,55 +93,68 @@ export function ChargeManager({ shipmentId, bills, charges }: { shipmentId: stri
           <thead><tr><th>Biaya</th><th>B/L</th><th>Kategori</th><th>Qty</th><th>Harga</th><th>PPN</th><th>Total</th><th>Aksi</th></tr></thead>
           <tbody>
             {charges.map((charge) => (
-              <tr key={charge.id}>
-                <td className="primary-cell"><strong>{charge.name}</strong><span>{charge.description || "-"}</span></td>
-                <td>{charge.billNumber || "-"}</td>
-                <td><span className={`badge ${charge.category === "JASA" ? "blue" : "orange"}`}>{charge.category}</span></td>
-                <td>{charge.quantity}</td>
-                <td>{rupiah.format(charge.unitPrice)}</td>
-                <td>{rupiah.format(charge.taxAmount)}</td>
-                <td className="money">{rupiah.format(charge.totalAmount)}</td>
-                <td>
-                  <div className="actions compact-actions">
-                    <details className="inline-editor">
-                      <summary>Edit</summary>
-                      <form className="charge-edit-form" onSubmit={updateCharge}>
-                        <input type="hidden" name="id" value={charge.id} />
-                        <div className="field"><label>Nama biaya</label><input name="name" defaultValue={charge.name} required /></div>
-                        <div className="field">
-                          <label>Kategori</label>
-                          <select name="category" defaultValue={charge.category}>
-                            <option value="JASA">JASA</option>
-                            <option value="REIMBURSEMENT">REIMBURSEMENT</option>
-                          </select>
-                        </div>
-                        <div className="field">
-                          <label>Terkait B/L</label>
-                          <select name="billId" defaultValue={charge.billId || ""}>
-                            <option value="">Level shipment</option>
-                            {bills.map((bill) => <option value={bill.id} key={bill.id}>{bill.number}</option>)}
-                          </select>
-                        </div>
-                        <div className="field"><label>Deskripsi</label><input name="description" defaultValue={charge.description || ""} /></div>
-                        <div className="field"><label>Quantity</label><input name="quantity" type="number" min="0.01" step="0.01" defaultValue={charge.quantity} required /></div>
-                        <div className="field">
-                          <label>Harga satuan</label>
-                          <input
-                            name="unitPrice"
-                            inputMode="numeric"
-                            value={prices[charge.id] ?? ""}
-                            onChange={(event) => setPrices((current) => ({ ...current, [charge.id]: formatMoneyInput(event.target.value) }))}
-                            placeholder="19.000.000"
-                            required
-                          />
-                        </div>
+              <Fragment key={charge.id}>
+                <tr>
+                  <td className="primary-cell"><strong>{charge.name}</strong><span>{charge.description || "-"}</span></td>
+                  <td>{charge.billNumber || "-"}</td>
+                  <td><span className={`badge ${charge.category === "JASA" ? "blue" : "orange"}`}>{charge.category}</span></td>
+                  <td>{charge.quantity}</td>
+                  <td>{rupiah.format(charge.unitPrice)}</td>
+                  <td>{rupiah.format(charge.taxAmount)}</td>
+                  <td className="money">{rupiah.format(charge.totalAmount)}</td>
+                  <td>
+                    <div className="actions compact-actions">
+                      <button
+                        className="btn btn-secondary"
+                        type="button"
+                        onClick={() => setEditingChargeId((current) => current === charge.id ? null : charge.id)}
+                      >
+                        {editingChargeId === charge.id ? "Tutup" : "Edit"}
+                      </button>
+                      <button className="btn btn-danger" type="button" onClick={() => deleteCharge(charge.id)}>Delete</button>
+                    </div>
+                  </td>
+                </tr>
+                {editingChargeId === charge.id && <tr className="charge-edit-row">
+                  <td colSpan={8}>
+                    <form className="charge-edit-form" onSubmit={updateCharge}>
+                      <input type="hidden" name="id" value={charge.id} />
+                      <div className="field"><label>Nama biaya</label><input name="name" defaultValue={charge.name} required /></div>
+                      <div className="field">
+                        <label>Kategori</label>
+                        <select name="category" defaultValue={charge.category}>
+                          <option value="JASA">JASA</option>
+                          <option value="REIMBURSEMENT">REIMBURSEMENT</option>
+                        </select>
+                      </div>
+                      <div className="field">
+                        <label>Terkait B/L</label>
+                        <select name="billId" defaultValue={charge.billId || ""}>
+                          <option value="">Level shipment</option>
+                          {bills.map((bill) => <option value={bill.id} key={bill.id}>{bill.number}</option>)}
+                        </select>
+                      </div>
+                      <div className="field"><label>Deskripsi</label><input name="description" defaultValue={charge.description || ""} /></div>
+                      <div className="field"><label>Quantity</label><input name="quantity" type="number" min="0.01" step="0.01" defaultValue={charge.quantity} required /></div>
+                      <div className="field">
+                        <label>Harga satuan</label>
+                        <input
+                          name="unitPrice"
+                          inputMode="numeric"
+                          value={prices[charge.id] ?? ""}
+                          onChange={(event) => setPrices((current) => ({ ...current, [charge.id]: formatMoneyInput(event.target.value) }))}
+                          placeholder="19.000.000"
+                          required
+                        />
+                      </div>
+                      <div className="charge-edit-actions">
                         <button className="btn btn-primary">Simpan edit</button>
-                      </form>
-                    </details>
-                    <button className="btn btn-danger" type="button" onClick={() => deleteCharge(charge.id)}>Delete</button>
-                  </div>
-                </td>
-              </tr>
+                        <button className="btn btn-ghost" type="button" onClick={() => setEditingChargeId(null)}>Batal</button>
+                      </div>
+                    </form>
+                  </td>
+                </tr>}
+              </Fragment>
             ))}
             {!charges.length && <tr><td colSpan={8} className="empty">Belum ada biaya.</td></tr>}
           </tbody>
