@@ -61,6 +61,7 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
   const navy = rgb(0.04, 0.09, 0.22);
   const blue = rgb(0.1, 0.4, 1);
   const muted = rgb(0.42, 0.46, 0.55);
+  const isManual = invoice.type === "LAIN_LAIN";
   let y = 780;
   const draw = (text: string, x: number, size = 9, font = regular, color = navy) => {
     page.drawText(sanitize(text), { x, y, size, font, color });
@@ -95,13 +96,20 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
   page.drawText(`Jatuh tempo: ${tanggal.format(invoice.dueDate)}`, { x: 350, y: 689, size: 8, font: regular, color: muted });
 
   y = 640;
-  const meta = [
-    [invoice.shipment.shipmentDirection === "EXPORT" ? "DO NUMBER (EXPORT)" : "B/L NUMBER (IMPORT)", invoice.shipment.doNumber],
-    ["VESSEL / VOYAGE", `${invoice.shipment.vessel} / ${invoice.shipment.voyage}`],
-    ["CARRIER", invoice.shipment.carrier?.name || "-"],
-    ["B/L NUMBER (IMPOR)", invoiceBlLabel(invoice)],
-    ["SIZE 20/40", summarizeContainerSizes(invoice.shipment.containers)],
-  ];
+  const meta = isManual
+    ? [
+        ["JENIS INVOICE", "Lain-lain / Non-trucking"],
+        ["JUDUL", invoice.manualTitle || "Invoice Lain-lain"],
+        ["REFERENSI", invoice.manualReference || "-"],
+        ["CATATAN", invoice.manualNotes || "-"],
+      ]
+    : [
+        [invoice.shipment?.shipmentDirection === "EXPORT" ? "DO NUMBER (EXPORT)" : "B/L NUMBER (IMPORT)", invoice.shipment?.doNumber || "-"],
+        ["VESSEL / VOYAGE", invoice.shipment ? `${invoice.shipment.vessel} / ${invoice.shipment.voyage}` : "-"],
+        ["CARRIER", invoice.shipment?.carrier?.name || "-"],
+        ["B/L NUMBER (IMPOR)", invoiceBlLabel(invoice)],
+        ["SIZE 20/40", summarizeContainerSizes(invoice.shipment?.containers || [])],
+      ];
   page.drawRectangle({ x: 38, y: 556, width: 519, height: 101, color: rgb(.97, .98, 1) });
   meta.forEach(([label, value], index) => {
     const x = 52 + (index % 2) * 255;
@@ -112,16 +120,18 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
 
   y = 520;
   page.drawRectangle({ x: 38, y: y - 5, width: 519, height: 26, color: navy });
-  const cols = [48, 260, 345, 430, 545];
-  ["DESKRIPSI", "QTY", "HARGA", "TOTAL"].forEach((label, i) => {
+  const headers = isManual ? ["URAIAN", "QTY", "SATUAN", "HARGA", "TOTAL"] : ["DESKRIPSI", "QTY", "HARGA", "TOTAL"];
+  const cols = isManual ? [48, 246, 300, 370, 545] : [48, 260, 345, 430, 545];
+  headers.forEach((label, i) => {
     page.drawText(label, { x: cols[i], y: y + 5, size: 7, font: bold, color: rgb(1,1,1) });
   });
   y -= 30;
   for (const item of invoice.items.slice(0, 14)) {
-    page.drawText(sanitize(item.description).slice(0, 48), { x: 48, y, size: 8, font: regular, color: navy });
-    drawRight(String(item.quantity), 270, y, 8, regular, navy);
-    drawRight(formatNumber(item.unitPrice.toNumber()), 395, y, 8, regular, navy);
-    drawRight(formatNumber(item.totalAmount.toNumber()), 505, y, 8, bold, navy);
+    page.drawText(sanitize(item.description).slice(0, isManual ? 38 : 48), { x: 48, y, size: 8, font: regular, color: navy });
+    drawRight(String(item.quantity), isManual ? 260 : 270, y, 8, regular, navy);
+    if (isManual) page.drawText(sanitize(item.unit).slice(0, 12), { x: 300, y, size: 8, font: regular, color: navy });
+    drawRight(formatNumber(item.unitPrice.toNumber()), isManual ? 430 : 395, y, 8, regular, navy);
+    drawRight(formatNumber(item.totalAmount.toNumber()), 545, y, 8, bold, navy);
     page.drawLine({ start: { x: 38, y: y - 8 }, end: { x: 557, y: y - 8 }, thickness: .4, color: rgb(.88,.9,.94) });
     y -= 24;
   }
@@ -172,83 +182,102 @@ async function buildExcel(invoice: InvoiceDocument, filePath: string) {
     pageSetup: { paperSize: 9, orientation: "portrait", fitToPage: true, fitToWidth: 1, fitToHeight: 1 },
     properties: { defaultRowHeight: 19 },
   });
+  const isManual = invoice.type === "LAIN_LAIN";
   sheet.columns = [
     { key: "a", width: 6 }, { key: "b", width: 34 }, { key: "c", width: 12 },
-    { key: "d", width: 18 }, { key: "e", width: 20 },
+    { key: "d", width: 14 }, { key: "e", width: 18 }, { key: "f", width: 20 },
   ];
   sheet.mergeCells("A1:C2");
   sheet.getCell("A1").value = invoice.company.name;
   sheet.getCell("A1").font = { bold: true, size: 18, color: { argb: "FF0B1739" } };
-  sheet.mergeCells("D1:E2");
-  sheet.getCell("D1").value = "INVOICE";
-  sheet.getCell("D1").font = { bold: true, size: 20, color: { argb: "FF1967FF" } };
-  sheet.getCell("D1").alignment = { horizontal: "right" };
+  sheet.mergeCells("E1:F2");
+  sheet.getCell("E1").value = "INVOICE";
+  sheet.getCell("E1").font = { bold: true, size: 20, color: { argb: "FF1967FF" } };
+  sheet.getCell("E1").alignment = { horizontal: "right" };
   sheet.mergeCells("A3:C3");
   sheet.getCell("A3").value = invoice.company.address;
-  sheet.getCell("D3").value = "Nomor";
-  sheet.getCell("E3").value = invoice.invoiceNumber;
-  sheet.getCell("D4").value = "Tanggal";
-  sheet.getCell("E4").value = tanggal.format(invoice.invoiceDate);
-  sheet.getCell("D5").value = "Jatuh tempo";
-  sheet.getCell("E5").value = tanggal.format(invoice.dueDate);
+  sheet.getCell("E3").value = "Nomor";
+  sheet.getCell("F3").value = invoice.invoiceNumber;
+  sheet.getCell("E4").value = "Tanggal";
+  sheet.getCell("F4").value = tanggal.format(invoice.invoiceDate);
+  sheet.getCell("E5").value = "Jatuh tempo";
+  sheet.getCell("F5").value = tanggal.format(invoice.dueDate);
   sheet.getCell("A7").value = "Kepada";
   sheet.getCell("B7").value = invoice.client.name;
-  sheet.getCell("A8").value = invoice.shipment.shipmentDirection === "EXPORT" ? "DO Number (Export)" : "B/L Number (Import)";
-  sheet.getCell("B8").value = invoice.shipment.doNumber;
-  sheet.getCell("A9").value = "Vessel/Voyage";
-  sheet.getCell("B9").value = `${invoice.shipment.vessel} / ${invoice.shipment.voyage}`;
-  sheet.getCell("D8").value = "B/L Number (Impor)";
-  sheet.getCell("E8").value = invoiceBlLabel(invoice);
-  sheet.getCell("D9").value = "Size 20/40";
-  sheet.getCell("E9").value = summarizeContainerSizes(invoice.shipment.containers);
+  if (isManual) {
+    sheet.getCell("A8").value = "Jenis";
+    sheet.getCell("B8").value = "Invoice Lain-lain";
+    sheet.getCell("A9").value = "Judul";
+    sheet.getCell("B9").value = invoice.manualTitle || "Invoice Lain-lain";
+    sheet.getCell("E8").value = "Referensi";
+    sheet.getCell("F8").value = invoice.manualReference || "-";
+  } else {
+    sheet.getCell("A8").value = invoice.shipment?.shipmentDirection === "EXPORT" ? "DO Number (Export)" : "B/L Number (Import)";
+    sheet.getCell("B8").value = invoice.shipment?.doNumber || "-";
+    sheet.getCell("A9").value = "Vessel/Voyage";
+    sheet.getCell("B9").value = invoice.shipment ? `${invoice.shipment.vessel} / ${invoice.shipment.voyage}` : "-";
+    sheet.getCell("E8").value = "B/L Number (Impor)";
+    sheet.getCell("F8").value = invoiceBlLabel(invoice);
+    sheet.getCell("E9").value = "Size 20/40";
+    sheet.getCell("F9").value = summarizeContainerSizes(invoice.shipment?.containers || []);
+  }
 
   const headerRow = sheet.getRow(11);
-  headerRow.values = ["No", "Deskripsi", "Qty", "Harga Satuan", "Total"];
+  headerRow.values = isManual
+    ? ["No", "Uraian", "Qty", "Satuan", "Harga Satuan", "Total"]
+    : ["No", "Deskripsi", "Qty", "", "Harga Satuan", "Total"];
   headerRow.eachCell((cell) => {
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0B1739" } };
     cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
     cell.alignment = { horizontal: "center" };
   });
   invoice.items.forEach((item, index) => {
-    sheet.addRow([index + 1, item.description, item.quantity.toNumber(), item.unitPrice.toNumber(), item.totalAmount.toNumber()]);
+    sheet.addRow(isManual
+      ? [index + 1, item.description, item.quantity.toNumber(), item.unit, item.unitPrice.toNumber(), item.totalAmount.toNumber()]
+      : [index + 1, item.description, item.quantity.toNumber(), "", item.unitPrice.toNumber(), item.totalAmount.toNumber()]);
   });
   const totalStart = 12 + invoice.items.length;
-  sheet.getCell(`D${totalStart}`).value = "Subtotal";
-  sheet.getCell(`E${totalStart}`).value = invoice.subtotal.toNumber();
-  sheet.getCell(`D${totalStart + 1}`).value = `PPN ${invoice.taxRate}%`;
-  sheet.getCell(`E${totalStart + 1}`).value = invoice.taxAmount.toNumber();
-  sheet.getCell(`D${totalStart + 2}`).value = "Grand Total";
-  sheet.getCell(`E${totalStart + 2}`).value = invoice.grandTotal.toNumber();
-  sheet.getCell(`D${totalStart + 2}`).font = { bold: true };
-  sheet.getCell(`E${totalStart + 2}`).font = { bold: true, color: { argb: "FF1967FF" } };
+  sheet.getCell(`E${totalStart}`).value = "Subtotal";
+  sheet.getCell(`F${totalStart}`).value = invoice.subtotal.toNumber();
+  sheet.getCell(`E${totalStart + 1}`).value = `PPN ${invoice.taxRate}%`;
+  sheet.getCell(`F${totalStart + 1}`).value = invoice.taxAmount.toNumber();
+  sheet.getCell(`E${totalStart + 2}`).value = "Grand Total";
+  sheet.getCell(`F${totalStart + 2}`).value = invoice.grandTotal.toNumber();
+  sheet.getCell(`E${totalStart + 2}`).font = { bold: true };
+  sheet.getCell(`F${totalStart + 2}`).font = { bold: true, color: { argb: "FF1967FF" } };
   let afterTotalRow = totalStart + 3;
   if (invoice.amountPaid.toNumber() > 0) {
-    sheet.getCell(`D${afterTotalRow}`).value = "DP / Paid";
-    sheet.getCell(`E${afterTotalRow}`).value = invoice.amountPaid.toNumber();
+    sheet.getCell(`E${afterTotalRow}`).value = "DP / Paid";
+    sheet.getCell(`F${afterTotalRow}`).value = invoice.amountPaid.toNumber();
     afterTotalRow += 1;
     if (invoice.outstandingAmount.toNumber() > 0) {
-      sheet.getCell(`D${afterTotalRow}`).value = "Sisa Tagihan";
-      sheet.getCell(`E${afterTotalRow}`).value = invoice.outstandingAmount.toNumber();
+      sheet.getCell(`E${afterTotalRow}`).value = "Sisa Tagihan";
+      sheet.getCell(`F${afterTotalRow}`).value = invoice.outstandingAmount.toNumber();
       afterTotalRow += 1;
     }
   }
-  sheet.mergeCells(`A${afterTotalRow + 1}:E${afterTotalRow + 1}`);
+  sheet.mergeCells(`A${afterTotalRow + 1}:F${afterTotalRow + 1}`);
   const words = paymentAwareWords(invoice);
   sheet.getCell(`A${afterTotalRow + 1}`).value = `${words.label}: ${words.text}`;
+  if (invoice.manualNotes) {
+    sheet.mergeCells(`A${afterTotalRow + 2}:F${afterTotalRow + 2}`);
+    sheet.getCell(`A${afterTotalRow + 2}`).value = `Catatan: ${invoice.manualNotes}`;
+    afterTotalRow += 1;
+  }
   const accounts = paymentAccounts(invoice);
-  sheet.mergeCells(`A${afterTotalRow + 3}:E${afterTotalRow + 3}`);
+  sheet.mergeCells(`A${afterTotalRow + 3}:F${afterTotalRow + 3}`);
   sheet.getCell(`A${afterTotalRow + 3}`).value = "Rekening pembayaran";
   sheet.getCell(`A${afterTotalRow + 3}`).font = { bold: true };
   accounts.forEach((account, index) => {
-    sheet.mergeCells(`A${afterTotalRow + 4 + index}:E${afterTotalRow + 4 + index}`);
+    sheet.mergeCells(`A${afterTotalRow + 4 + index}:F${afterTotalRow + 4 + index}`);
     sheet.getCell(`A${afterTotalRow + 4 + index}`).value = `${account.bankName}${account.isPrimary ? " (Utama)" : ""}: ${account.accountNumber} a.n. ${account.accountName}`;
   });
   if (!accounts.length) {
-    sheet.mergeCells(`A${afterTotalRow + 4}:E${afterTotalRow + 4}`);
+    sheet.mergeCells(`A${afterTotalRow + 4}:F${afterTotalRow + 4}`);
     sheet.getCell(`A${afterTotalRow + 4}`).value = "Belum ada rekening pembayaran.";
   }
-  sheet.getColumn(4).numFmt = '"Rp" #,##0';
   sheet.getColumn(5).numFmt = '"Rp" #,##0';
+  sheet.getColumn(6).numFmt = '"Rp" #,##0';
   sheet.protect("logisflow", { selectLockedCells: true, selectUnlockedCells: true });
   await workbook.xlsx.writeFile(filePath);
 }
@@ -297,7 +326,7 @@ function fitImage(width: number, height: number, maxWidth: number, maxHeight: nu
 
 function invoiceBlLabel(invoice: InvoiceDocument) {
   if (invoice.bill?.number) return invoice.bill.number;
-  return invoice.type === "JASA" ? "Gabungan" : "Reimbursement Gabungan";
+  return invoice.type === "JASA" ? "Gabungan" : invoice.type === "REIMBURSEMENT" ? "Reimbursement Gabungan" : "-";
 }
 
 function paymentAccounts(invoice: InvoiceDocument) {

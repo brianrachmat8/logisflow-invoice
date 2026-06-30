@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
   Activity, Anchor, BarChart3, Bell, Building2, ChevronDown, CircleDollarSign,
-  FileSpreadsheet, LayoutDashboard, Menu, ReceiptText, Settings, Ship, Users,
+  FilePlus2, FileSpreadsheet, LayoutDashboard, Menu, ReceiptText, Settings, Ship, Users,
 } from "lucide-react";
 import { auth, signOut } from "@/auth";
 
@@ -10,6 +10,7 @@ const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/shipments", label: "Shipment / Job Order", icon: Ship },
   { href: "/invoices", label: "Invoice", icon: ReceiptText },
+  { href: "/invoices/manual/new", label: "Invoice Lain-lain", icon: FilePlus2 },
   { href: "/payments", label: "Pembayaran", icon: CircleDollarSign },
   { href: "/ar-tracking", label: "AR Tracking", icon: BarChart3 },
   { href: "/reports", label: "Laporan", icon: FileSpreadsheet },

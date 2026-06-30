@@ -2,8 +2,26 @@ import { Prisma, type InvoiceStatus, type InvoiceType } from "@prisma/client";
 import { addDays } from "date-fns";
 import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
-import { invoiceNumber, type InvoiceSplitMode, previewSplit, terbilang } from "@/lib/business";
+import { invoiceNumber, type InvoiceSplitMode, previewSplit, roundMoney, terbilang } from "@/lib/business";
 import { generateInvoiceDocuments } from "@/lib/documents";
+
+export type ManualInvoiceItemInput = {
+  description: string;
+  unit?: string;
+  quantity: number;
+  unitPrice: number;
+};
+
+export type ManualInvoiceInput = {
+  clientId: string;
+  title: string;
+  reference?: string;
+  notes?: string;
+  invoiceDate: Date;
+  dueDate: Date;
+  taxRate: number;
+  items: ManualInvoiceItemInput[];
+};
 
 export async function getShipmentForInvoice(shipmentId: string) {
   return db.shipment.findUnique({
@@ -124,6 +142,7 @@ export async function generateDraftInvoices(
             create: group.items.map((item) => ({
               chargeId: item.id,
               description: item.description || item.name,
+              unit: "Unit",
               quantity: new Prisma.Decimal(item.quantity),
               unitPrice: new Prisma.Decimal(item.unitPrice),
               subtotal: new Prisma.Decimal(item.subtotal),
@@ -148,6 +167,79 @@ export async function generateDraftInvoices(
       tx,
     );
     return invoices;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
+export async function createManualInvoice(input: ManualInvoiceInput, userId: string) {
+  const company = await db.company.findFirst();
+  if (!company) throw new Error("Identitas perusahaan belum dikonfigurasi.");
+  if (!input.clientId) throw new Error("Klien wajib dipilih.");
+  if (!input.title.trim()) throw new Error("Judul invoice wajib diisi.");
+  const items = input.items
+    .map((item) => ({
+      ...item,
+      description: item.description.trim(),
+      unit: item.unit?.trim() || "Unit",
+      quantity: Number(item.quantity),
+      unitPrice: Number(item.unitPrice),
+    }))
+    .filter((item) => item.description && item.quantity > 0 && item.unitPrice >= 0);
+  if (!items.length) throw new Error("Minimal satu item invoice wajib diisi.");
+
+  const calculated = items.map((item) => {
+    const subtotal = roundMoney(item.quantity * item.unitPrice);
+    const taxAmount = roundMoney(subtotal * (input.taxRate / 100));
+    return { ...item, subtotal, taxAmount, totalAmount: subtotal + taxAmount };
+  });
+  const subtotal = roundMoney(calculated.reduce((sum, item) => sum + item.subtotal, 0));
+  const taxAmount = roundMoney(calculated.reduce((sum, item) => sum + item.taxAmount, 0));
+  const grandTotal = subtotal + taxAmount;
+  const now = new Date();
+
+  return db.$transaction(async (tx) => {
+    const invoice = await tx.invoice.create({
+      data: {
+        draftNumber: `DRAFT/LAIN/${now.getFullYear()}/${String(now.getTime()).slice(-8)}`,
+        type: "LAIN_LAIN",
+        companyId: company.id,
+        clientId: input.clientId,
+        manualTitle: input.title.trim(),
+        manualReference: input.reference?.trim() || null,
+        manualNotes: input.notes?.trim() || null,
+        invoiceDate: input.invoiceDate,
+        dueDate: input.dueDate,
+        subtotal: new Prisma.Decimal(subtotal),
+        taxRate: new Prisma.Decimal(input.taxRate),
+        taxAmount: new Prisma.Decimal(taxAmount),
+        grandTotal: new Prisma.Decimal(grandTotal),
+        outstandingAmount: new Prisma.Decimal(grandTotal),
+        amountInWords: terbilang(grandTotal),
+        createdById: userId,
+        items: {
+          create: calculated.map((item) => ({
+            description: item.description,
+            unit: item.unit,
+            quantity: new Prisma.Decimal(item.quantity),
+            unitPrice: new Prisma.Decimal(item.unitPrice),
+            subtotal: new Prisma.Decimal(item.subtotal),
+            taxAmount: new Prisma.Decimal(item.taxAmount),
+            totalAmount: new Prisma.Decimal(item.totalAmount),
+          })),
+        },
+      },
+      include: { items: true },
+    });
+    await audit(
+      {
+        userId,
+        module: "INVOICE",
+        action: "CREATE_MANUAL_DRAFT",
+        referenceId: invoice.id,
+        newValue: { invoiceId: invoice.id, type: invoice.type, itemCount: invoice.items.length, grandTotal },
+      },
+      tx,
+    );
+    return invoice;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
@@ -208,11 +300,11 @@ export async function finalizeInvoice(invoiceId: string, userId: string) {
       await tx.payment.create({
         data: {
           invoiceId,
-          paymentDate: invoice.shipment.advanceDpDate || date,
+          paymentDate: invoice.shipment?.advanceDpDate || date,
           amount: new Prisma.Decimal(amountPaid),
-          method: invoice.shipment.advanceDpMethod || "Transfer Bank",
-          bankReference: invoice.shipment.advanceDpReference || undefined,
-          notes: invoice.shipment.advanceDpNotes
+          method: invoice.shipment?.advanceDpMethod || "Transfer Bank",
+          bankReference: invoice.shipment?.advanceDpReference || undefined,
+          notes: invoice.shipment?.advanceDpNotes
             ? `DP awal shipment - ${invoice.shipment.advanceDpNotes}`
             : "DP awal shipment",
           createdById: userId,
@@ -296,5 +388,5 @@ export async function recordPayment(
 }
 
 export function typePrefix(type: InvoiceType) {
-  return type === "JASA" ? "JASA" : "REIM";
+  return type === "JASA" ? "JASA" : type === "REIMBURSEMENT" ? "REIM" : "LAIN";
 }
