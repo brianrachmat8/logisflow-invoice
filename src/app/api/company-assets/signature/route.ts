@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const file = await fs.readFile(company.signaturePath);
-    return new NextResponse(file, { headers: { "content-type": "image/png", "cache-control": "private, max-age=60" } });
+    return new NextResponse(new Uint8Array(file), { headers: { "content-type": "image/png", "cache-control": "private, max-age=60" } });
   } catch {
     return new NextResponse(null, { status: 404 });
   }
