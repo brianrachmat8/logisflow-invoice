@@ -2,6 +2,8 @@
 
 Panduan ini untuk menjadikan aplikasi dari `localhost` menjadi website aplikasi online yang bisa diakses dari mana saja dengan data tersimpan di server.
 
+Jika target server adalah Biznet VPS, baca juga `DEPLOYMENT_BIZNET_VPS.md` untuk checklist DNS, firewall, backup, dan troubleshooting yang lebih spesifik.
+
 ## 1. Persiapan VPS
 
 Rekomendasi minimal:
