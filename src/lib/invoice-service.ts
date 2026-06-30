@@ -24,6 +24,7 @@ export async function previewShipmentInvoice(shipmentId: string, mode: InvoiceSp
   const shipment = await getShipmentForInvoice(shipmentId);
   if (!shipment) throw new Error("Shipment tidak ditemukan.");
   validateShipment(shipment, { allowDraftInvoices: true });
+  const effectiveMode: InvoiceSplitMode = shipment.shipmentDirection === "LAIN_LAIN" ? "combine_jasa" : mode;
   return {
     shipment,
     split: previewSplit(
@@ -38,7 +39,7 @@ export async function previewShipmentInvoice(shipmentId: string, mode: InvoiceSp
         unitPrice: charge.unitPrice.toNumber(),
         taxRate: charge.taxRate.toNumber(),
       })),
-      mode,
+      effectiveMode,
     ),
   };
 }
@@ -47,12 +48,13 @@ function validateShipment(
   shipment: NonNullable<Awaited<ReturnType<typeof getShipmentForInvoice>>>,
   options: { allowDraftInvoices?: boolean } = {},
 ) {
+  const isOtherOrder = shipment.shipmentDirection === "LAIN_LAIN";
   if (shipment.status === "CANCELLED") throw new Error("Shipment telah dibatalkan.");
-  if (!shipment.doNumber) throw new Error("Nomor DO wajib diisi.");
-  if (!shipment.bills.length) throw new Error("Minimal satu B/L wajib tersedia.");
-  if (!shipment.containers.length) throw new Error("Minimal satu kontainer wajib tersedia.");
+  if (!shipment.doNumber) throw new Error(isOtherOrder ? "Nomor referensi wajib diisi." : "Nomor DO wajib diisi.");
+  if (!isOtherOrder && !shipment.bills.length) throw new Error("Minimal satu B/L wajib tersedia.");
+  if (!isOtherOrder && !shipment.containers.length) throw new Error("Minimal satu kontainer wajib tersedia.");
   if (!shipment.charges.length) throw new Error("Minimal satu biaya wajib tersedia.");
-  if (shipment.charges.some((charge) => charge.category === "JASA" && !charge.billId)) {
+  if (!isOtherOrder && shipment.charges.some((charge) => charge.category === "JASA" && !charge.billId)) {
     throw new Error("Semua biaya JASA wajib terkait dengan B/L.");
   }
   const activeInvoices = shipment.invoices.filter((invoice) => invoice.status !== "CANCELLED" && invoice.status !== "REVISED");
@@ -70,8 +72,9 @@ export async function generateDraftInvoices(
   userId: string,
   options: { mode?: InvoiceSplitMode; replaceDraft?: boolean; action?: string } = {},
 ) {
-  const mode = options.mode ?? "split_by_bl";
-  const { shipment, split } = await previewShipmentInvoice(shipmentId, mode);
+  const requestedMode = options.mode ?? "split_by_bl";
+  const { shipment, split } = await previewShipmentInvoice(shipmentId, requestedMode);
+  const mode: InvoiceSplitMode = shipment.shipmentDirection === "LAIN_LAIN" ? "combine_jasa" : requestedMode;
   const company = await db.company.findFirst();
   if (!company) throw new Error("Identitas perusahaan belum dikonfigurasi.");
   const groups = [...split.jasa, ...split.reimbursement];
@@ -154,13 +157,14 @@ export async function generateDraftInvoices(
 export async function syncDraftInvoicesForShipment(shipmentId: string, userId: string) {
   const drafts = await db.invoice.findMany({
     where: { shipmentId, status: { notIn: ["CANCELLED", "REVISED"] } },
-    select: { type: true, billId: true, status: true },
+    select: { type: true, billId: true, status: true, shipment: { select: { shipmentDirection: true } } },
   });
   if (!drafts.length) return null;
   if (drafts.some((invoice) => invoice.status !== "DRAFT")) return null;
 
+  const isOtherOrder = drafts[0]?.shipment.shipmentDirection === "LAIN_LAIN";
   const jasaDrafts = drafts.filter((invoice) => invoice.type === "JASA");
-  const mode: InvoiceSplitMode = jasaDrafts.length === 1 && !jasaDrafts[0]?.billId ? "combine_jasa" : "split_by_bl";
+  const mode: InvoiceSplitMode = isOtherOrder || (jasaDrafts.length === 1 && !jasaDrafts[0]?.billId) ? "combine_jasa" : "split_by_bl";
   return generateDraftInvoices(shipmentId, userId, {
     mode,
     replaceDraft: true,
