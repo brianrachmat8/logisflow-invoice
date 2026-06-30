@@ -26,6 +26,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
   });
   if (!invoice) notFound();
 
+  const isManual = invoice.type === "LAIN_LAIN";
   const paidAmount = numberValue(invoice.amountPaid);
   const outstandingAmount = numberValue(invoice.outstandingAmount);
   const wordsAmount = paidAmount > 0 ? outstandingAmount : numberValue(invoice.grandTotal);
@@ -56,13 +57,13 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
   return <AppShell title="Detail invoice">
     <div className="page-head">
       <div>
-        <Link href={`/shipments/${invoice.shipmentId}`} className="btn btn-ghost" style={{ marginBottom: 12 }}>
-          <ArrowLeft size={16} /> Kembali ke shipment
+        <Link href={invoice.shipmentId ? `/shipments/${invoice.shipmentId}` : "/invoices"} className="btn btn-ghost" style={{ marginBottom: 12 }}>
+          <ArrowLeft size={16} /> {invoice.shipmentId ? "Kembali ke shipment" : "Kembali ke invoice"}
         </Link>
         <div>
           <StatusBadge status={invoice.status} />
           <h2 style={{ marginTop: 10 }}>{invoice.invoiceNumber || invoice.draftNumber}</h2>
-          <p>{invoice.type} · {invoice.client.name}</p>
+          <p>{isManual ? "LAIN-LAIN" : invoice.type} · {invoice.client.name}</p>
         </div>
       </div>
       <div className="actions">
@@ -99,20 +100,28 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
           <span style={{ fontSize: 12, color: "var(--muted)" }}>{invoice.client.address}</span>
         </div>
         <div className="summary-stack">
-          <div className="summary-line"><span>{invoice.shipment.shipmentDirection === "EXPORT" ? "DO Number (Export)" : "B/L Number (Import)"}</span><strong>{invoice.shipment.doNumber}</strong></div>
-          <div className="summary-line"><span>Vessel/Voyage</span><strong>{invoice.shipment.vessel} / {invoice.shipment.voyage}</strong></div>
-          <div className="summary-line"><span>B/L Number</span><strong>{invoice.bill?.number || "Gabungan"}</strong></div>
-          <div className="summary-line"><span>Size 20/40</span><strong>{summarizeContainerSizes(invoice.shipment.containers)}</strong></div>
+          {isManual ? <>
+            <div className="summary-line"><span>Jenis invoice</span><strong>Lain-lain / Non-trucking</strong></div>
+            <div className="summary-line"><span>Judul</span><strong>{invoice.manualTitle || "Invoice Lain-lain"}</strong></div>
+            <div className="summary-line"><span>Referensi</span><strong>{invoice.manualReference || "-"}</strong></div>
+            <div className="summary-line"><span>Jatuh tempo</span><strong>{tanggal.format(invoice.dueDate)}</strong></div>
+          </> : <>
+            <div className="summary-line"><span>{invoice.shipment?.shipmentDirection === "EXPORT" ? "DO Number (Export)" : "B/L Number (Import)"}</span><strong>{invoice.shipment?.doNumber || "-"}</strong></div>
+            <div className="summary-line"><span>Vessel/Voyage</span><strong>{invoice.shipment ? `${invoice.shipment.vessel} / ${invoice.shipment.voyage}` : "-"}</strong></div>
+            <div className="summary-line"><span>B/L Number</span><strong>{invoice.bill?.number || "Gabungan"}</strong></div>
+            <div className="summary-line"><span>Size 20/40</span><strong>{summarizeContainerSizes(invoice.shipment?.containers || [])}</strong></div>
+          </>}
         </div>
       </div>
 
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Deskripsi</th><th>Qty</th><th>Harga</th><th>Total</th></tr></thead>
+          <thead><tr><th>{isManual ? "Uraian" : "Deskripsi"}</th><th>Qty</th>{isManual && <th>Satuan</th>}<th>Harga</th><th>Total</th></tr></thead>
           <tbody>
             {invoice.items.map((item) => <tr key={item.id}>
               <td>{item.description}</td>
               <td>{numberValue(item.quantity)}</td>
+              {isManual && <td>{item.unit}</td>}
               <td>{rupiah.format(numberValue(item.unitPrice))}</td>
               <td className="money">{rupiah.format(numberValue(item.totalAmount))}</td>
             </tr>)}
@@ -129,6 +138,10 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
         {outstandingAmount > 0 && <div className="summary-line"><span>Sisa tagihan</span><strong>{rupiah.format(outstandingAmount)}</strong></div>}
       </div>
 
+      {invoice.manualNotes && <div style={{ marginTop: 24, borderTop: "1px solid var(--line)", paddingTop: 18 }}>
+        <small style={{ color: "var(--muted)" }}>CATATAN</small>
+        <p>{invoice.manualNotes}</p>
+      </div>}
       <div style={{ marginTop: 28, borderTop: "1px solid var(--line)", paddingTop: 18 }}>
         <small style={{ color: "var(--muted)" }}>{wordsLabel}</small>
         <strong style={{ display: "block", marginTop: 5 }}>{terbilang(wordsAmount)}</strong>
@@ -149,7 +162,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
       </div>
     </div>
 
-    {invoice.status !== "DRAFT" && invoice.status !== "PAID" && <div className="grid-equal" style={{ marginTop: 20 }}>
+    {!["DRAFT", "PAID", "CANCELLED", "REVISED"].includes(invoice.status) && <div className="grid-equal" style={{ marginTop: 20 }}>
       <div className="card">
         <div className="card-head"><h3>Catat DP / pembayaran</h3></div>
         <div className="card-body"><PaymentForm invoiceId={id} max={outstandingAmount} /></div>
