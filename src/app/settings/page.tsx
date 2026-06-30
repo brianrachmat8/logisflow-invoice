@@ -27,7 +27,6 @@ async function saveUpload(file: FormDataEntryValue | null, prefix: string, allow
 }
 
 async function redirectToCompany(companyId: string) {
-  "use server";
   revalidatePath("/settings");
   redirect(`/settings?companyId=${companyId}`);
 }
