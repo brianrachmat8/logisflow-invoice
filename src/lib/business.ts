@@ -11,6 +11,7 @@ export type ChargeInput = {
 };
 
 export type InvoiceSplitMode = "split_by_bl" | "combine_jasa";
+export type InvoiceNumberType = "JASA" | "REIMBURSEMENT" | "LAIN_LAIN";
 
 export function calculateCharge(input: Pick<ChargeInput, "quantity" | "unitPrice" | "category" | "taxRate">) {
   const subtotal = roundMoney(input.quantity * input.unitPrice);
@@ -100,8 +101,9 @@ export function terbilang(value: number) {
   return `${spell(Math.floor(Math.abs(value))).replace(/\s+/g, " ").trim()} Rupiah`;
 }
 
-export function invoiceNumber(type: "JASA" | "REIMBURSEMENT", date: Date, sequence: number) {
+export function invoiceNumber(type: InvoiceNumberType, date: Date, sequence: number) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
-  return `INV/${type === "JASA" ? "JASA" : "REIM"}/${year}/${month}/${String(sequence).padStart(4, "0")}`;
+  const prefix = type === "JASA" ? "JASA" : type === "REIMBURSEMENT" ? "REIM" : "LAIN";
+  return `INV/${prefix}/${year}/${month}/${String(sequence).padStart(4, "0")}`;
 }
