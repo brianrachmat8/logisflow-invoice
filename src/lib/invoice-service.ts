@@ -2,7 +2,7 @@ import { Prisma, type InvoiceStatus, type InvoiceType } from "@prisma/client";
 import { addDays } from "date-fns";
 import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
-import { invoiceNumber, type InvoiceSplitMode, previewSplit, terbilang } from "@/lib/business";
+import { allocateAdvanceDp, invoiceNumber, type InvoiceSplitMode, previewSplit, roundMoney, terbilang } from "@/lib/business";
 import { generateInvoiceDocuments } from "@/lib/documents";
 
 export async function getShipmentForInvoice(shipmentId: string) {
@@ -81,6 +81,7 @@ export async function generateDraftInvoices(
   if (advanceDpAmount > totalGrand) {
     throw new Error("DP/lunas awal lebih besar dari total biaya yang sudah diinput. Tambahkan semua biaya terlebih dahulu atau cek kembali nominal pembayaran.");
   }
+  const advanceDpAllocations = allocateAdvanceDp(groups.map((group) => group.grandTotal), advanceDpAmount);
 
   return db.$transaction(async (tx) => {
     const existing = await tx.invoice.findMany({
@@ -96,12 +97,10 @@ export async function generateDraftInvoices(
     }
 
     const invoices = [];
-    let remainingAdvanceDp = advanceDpAmount;
     for (const [index, group] of groups.entries()) {
       const draftNumber = `DRAFT/${now.getFullYear()}/${shipment.jobNumber}/${String(index + 1).padStart(2, "0")}`;
-      const paidFromAdvanceDp = Math.min(remainingAdvanceDp, group.grandTotal);
-      remainingAdvanceDp -= paidFromAdvanceDp;
-      const outstandingAmount = group.grandTotal - paidFromAdvanceDp;
+      const paidFromAdvanceDp = advanceDpAllocations[index] ?? 0;
+      const outstandingAmount = roundMoney(group.grandTotal - paidFromAdvanceDp);
       const invoice = await tx.invoice.create({
         data: {
           draftNumber,
@@ -143,7 +142,7 @@ export async function generateDraftInvoices(
         module: "INVOICE",
         action: options.action ?? (existing.length ? "REGENERATE_DRAFT" : "GENERATE_DRAFT"),
         referenceId: shipmentId,
-        newValue: { invoiceIds: invoices.map((invoice) => invoice.id), count: invoices.length, mode },
+        newValue: { invoiceIds: invoices.map((invoice) => invoice.id), count: invoices.length, mode, advanceDpAmount },
       },
       tx,
     );
