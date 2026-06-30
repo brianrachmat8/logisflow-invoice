@@ -2,7 +2,7 @@ import { Prisma, type InvoiceStatus, type InvoiceType } from "@prisma/client";
 import { addDays } from "date-fns";
 import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
-import { allocateAdvanceDp, invoiceNumber, type InvoiceSplitMode, previewSplit, roundMoney, terbilang } from "@/lib/business";
+import { allocateAdvanceDp, invoiceDirectionCode, invoiceNumber, type InvoiceSplitMode, previewSplit, roundMoney, terbilang } from "@/lib/business";
 import { generateInvoiceDocuments } from "@/lib/documents";
 
 export async function getShipmentForInvoice(shipmentId: string) {
@@ -173,7 +173,7 @@ export async function syncDraftInvoicesForShipment(shipmentId: string, userId: s
 
 export async function finalizeInvoice(invoiceId: string, userId: string) {
   const finalized = await db.$transaction(async (tx) => {
-    const invoice = await tx.invoice.findUnique({ where: { id: invoiceId }, include: { shipment: true, payments: true } });
+    const invoice = await tx.invoice.findUnique({ where: { id: invoiceId }, include: { shipment: true, client: true, payments: true } });
     if (!invoice) throw new Error("Invoice tidak ditemukan.");
     if (invoice.status !== "DRAFT") throw new Error("Hanya invoice Draft yang dapat difinalisasi.");
     const amountPaid = invoice.amountPaid.toNumber();
@@ -181,23 +181,8 @@ export async function finalizeInvoice(invoiceId: string, userId: string) {
     const finalStatus: InvoiceStatus = amountPaid <= 0 ? "FINAL" : outstandingAmount <= 0 ? "PAID" : "PARTIAL_PAID";
 
     const date = new Date();
-    const sequence = await tx.invoiceSequence.upsert({
-      where: {
-        invoiceType_year_month: {
-          invoiceType: invoice.type,
-          year: date.getFullYear(),
-          month: date.getMonth() + 1,
-        },
-      },
-      create: {
-        invoiceType: invoice.type,
-        year: date.getFullYear(),
-        month: date.getMonth() + 1,
-        lastNumber: 1,
-      },
-      update: { lastNumber: { increment: 1 } },
-    });
-    const number = invoiceNumber(invoice.type, date, sequence.lastNumber);
+    const prefix = `${invoice.client.code}/${invoiceDirectionCode(invoice.shipment.shipmentDirection)}`;
+    const number = await nextInvoiceNumber(tx, prefix, date);
     const result = await tx.invoice.update({
       where: { id: invoiceId },
       data: {
@@ -237,6 +222,19 @@ export async function finalizeInvoice(invoiceId: string, userId: string) {
 
   await generateInvoiceDocuments(finalized.id);
   return finalized;
+}
+
+async function nextInvoiceNumber(tx: Prisma.TransactionClient, prefix: string, date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const invoicePrefix = `${prefix}/${year}/${month}/`;
+  const latest = await tx.invoice.findFirst({
+    where: { invoiceNumber: { startsWith: invoicePrefix } },
+    select: { invoiceNumber: true },
+    orderBy: { invoiceNumber: "desc" },
+  });
+  const latestSequence = latest?.invoiceNumber ? Number(latest.invoiceNumber.split("/").at(-1)) || 0 : 0;
+  return invoiceNumber(prefix, date, latestSequence + 1);
 }
 
 export async function recordPayment(
