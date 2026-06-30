@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     const file = await fs.readFile(company.logoPath);
     const ext = path.extname(company.logoPath).toLowerCase();
     const contentType = ext === ".png" ? "image/png" : "image/jpeg";
-    return new NextResponse(file, { headers: { "content-type": contentType, "cache-control": "private, max-age=60" } });
+    return new NextResponse(new Uint8Array(file), { headers: { "content-type": contentType, "cache-control": "private, max-age=60" } });
   } catch {
     return new NextResponse(null, { status: 404 });
   }
