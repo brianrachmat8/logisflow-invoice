@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agingBucket, allocateAdvanceDp, calculateCharge, invoiceNumber, previewSplit, terbilang } from "./business";
+import { agingBucket, allocateAdvanceDp, calculateCharge, invoiceDirectionCode, invoiceNumber, previewSplit, terbilang } from "./business";
 
 describe("perhitungan invoice", () => {
   it("menghitung JASA dengan PPN", () => {
@@ -45,8 +45,13 @@ describe("perhitungan invoice", () => {
 });
 
 describe("utilitas invoice", () => {
-  it("membentuk nomor invoice unik berbasis urutan", () => {
-    expect(invoiceNumber("JASA", new Date(2026, 5, 24), 1)).toBe("INV/JASA/2026/06/0001");
+  it("membentuk nomor invoice berbasis kode klien dan jenis order", () => {
+    expect(invoiceNumber("LKL/IMP", new Date(2026, 5, 24), 1)).toBe("LKL/IMP/2026/06/0001");
+  });
+  it("membentuk kode jenis order invoice", () => {
+    expect(invoiceDirectionCode("IMPORT")).toBe("IMP");
+    expect(invoiceDirectionCode("EXPORT")).toBe("EXP");
+    expect(invoiceDirectionCode("LAIN_LAIN")).toBe("DLL");
   });
   it("membuat terbilang bahasa Indonesia", () => {
     expect(terbilang(6_105_000)).toBe("Enam Juta Seratus Lima Ribu Rupiah");
