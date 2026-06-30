@@ -132,6 +132,7 @@ model Company {
   npwp              String?
   phone             String?
   email             String?
+  isDefault         Boolean  @default(false)
   logoPath          String?
   signaturePath     String?
   closingGreeting   String?

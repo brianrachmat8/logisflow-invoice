@@ -75,7 +75,8 @@ export async function generateDraftInvoices(
   const requestedMode = options.mode ?? "split_by_bl";
   const { shipment, split } = await previewShipmentInvoice(shipmentId, requestedMode);
   const mode: InvoiceSplitMode = shipment.shipmentDirection === "LAIN_LAIN" ? "combine_jasa" : requestedMode;
-  const company = await db.company.findFirst();
+  const company = await db.company.findFirst({ where: { isDefault: true } })
+    ?? await db.company.findFirst({ orderBy: { createdAt: "asc" } });
   if (!company) throw new Error("Identitas perusahaan belum dikonfigurasi.");
   const groups = [...split.jasa, ...split.reimbursement];
   const now = new Date();
