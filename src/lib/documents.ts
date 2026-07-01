@@ -58,136 +58,123 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   const logoImage = await embedPdfImage(pdf, invoice.company.logoPath);
   const signatureImage = await embedPdfImage(pdf, invoice.company.signaturePath);
-  const pageWidth = 595.28;
-  const pageHeight = 841.89;
-  const teal = rgb(0.23, 0.48, 0.62);
-  const tealDark = rgb(0.05, 0.13, 0.28);
-  const cream = rgb(1, 0.93, 0.78);
-  const accent = rgb(0.95, 0.43, 0.29);
-  const navy = rgb(0.04, 0.09, 0.22);
-  const muted = rgb(0.32, 0.39, 0.48);
+  const navy = rgb(0.06, 0.11, 0.31);
+  const red = rgb(0.86, 0.07, 0.14);
+  const muted = rgb(0.34, 0.38, 0.52);
+  const line = rgb(0.66, 0.7, 0.8);
   const white = rgb(1, 1, 1);
+  const pageWidth = 595.28;
+  const marginX = 34;
+  const contentWidth = pageWidth - marginX * 2;
+
+  const drawText = (text: string, x: number, y: number, size = 9, font = regular, color = navy) => {
+    page.drawText(sanitize(text), { x, y, size, font, color });
+  };
   const drawRight = (text: string, rightX: number, y: number, size = 9, font = regular, color = navy) => {
     const safe = sanitize(text);
     page.drawText(safe, { x: rightX - font.widthOfTextAtSize(safe, size), y, size, font, color });
   };
-  const drawCentered = (text: string, centerX: number, y: number, size: number, font = bold, color = white) => {
-    const safe = sanitize(text);
-    page.drawText(safe, { x: centerX - font.widthOfTextAtSize(safe, size) / 2, y, size, font, color });
+  const sectionHeader = (title: string, x: number, y: number, width: number) => {
+    page.drawRectangle({ x, y, width, height: 18, color: navy });
+    drawText(title, x + 10, y + 4, 11, bold, white);
   };
 
-  page.drawRectangle({ x: 0, y: 0, width: pageWidth, height: pageHeight, color: cream });
-  page.drawRectangle({ x: 0, y: 592, width: pageWidth, height: 250, color: teal });
-  page.drawRectangle({ x: 0, y: 0, width: pageWidth, height: 34, color: teal });
-
-  [0, 48, 105].forEach((x, index) => {
-    page.drawRectangle({ x, y: 804, width: 32, height: 8, color: accent });
-    page.drawRectangle({ x: x + 48, y: 784, width: 40, height: 8, color: accent });
-    if (index !== 1) page.drawRectangle({ x: x + 8, y: 764, width: 40, height: 8, color: accent });
-  });
-  [250, 308].forEach((x) => {
-    page.drawRectangle({ x, y: 804, width: 40, height: 8, color: accent });
-    page.drawRectangle({ x: x + 16, y: 784, width: 40, height: 8, color: accent });
-    page.drawRectangle({ x: x + 58, y: 764, width: 40, height: 8, color: accent });
-  });
+  page.drawRectangle({ x: 0, y: 0, width: pageWidth, height: 841.89, color: white });
 
   if (logoImage) {
-    const logoSize = fitImage(logoImage.width, logoImage.height, 74, 48);
-    page.drawImage(logoImage, { x: 468, y: 770, width: logoSize.width, height: logoSize.height });
+    const logoSize = fitImage(logoImage.width, logoImage.height, 112, 54);
+    page.drawImage(logoImage, { x: marginX, y: 764, width: logoSize.width, height: logoSize.height });
   } else {
-    page.drawCircle({ x: 508, y: 795, size: 24, color: white });
-    page.drawCircle({ x: 508, y: 795, size: 9, color: teal });
+    page.drawRectangle({ x: marginX, y: 782, width: 22, height: 22, color: red });
+    drawText(invoice.company.name, marginX + 36, 779, 20, bold, navy);
   }
-  drawRight(invoice.company.name, 544, 748, 14, bold, white);
+  drawRight("INVOICE", pageWidth - marginX, 778, 25, bold, red);
 
-  page.drawRectangle({ x: 207, y: 657, width: 181, height: 20, color: accent });
-  drawCentered("INVOICE", pageWidth / 2, 672, 38, bold, white);
+  drawText(`Invoice No ${invoice.invoiceNumber}`, marginX + 4, 728, 11, bold, navy);
+  drawText(tanggal.format(invoice.invoiceDate), marginX + 4, 708, 12, bold, navy);
+  drawText(`Jatuh Tempo ${tanggal.format(invoice.dueDate)}`, marginX + 4, 688, 9, bold, navy);
 
-  page.drawText(`INVOICE NO. ${invoice.invoiceNumber}`, { x: 84, y: 622, size: 11, font: bold, color: white });
-  page.drawText(`DATE ${tanggal.format(invoice.invoiceDate)}`, { x: 84, y: 606, size: 11, font: bold, color: white });
-  page.drawText(`DUE ${tanggal.format(invoice.dueDate)}`, { x: 84, y: 590, size: 9, font: regular, color: white });
+  const leftX = marginX;
+  const rightX = 316;
+  const panelY = 650;
+  const panelW = 226;
+  sectionHeader("Ditagihkan Kepada", leftX, panelY, panelW);
+  sectionHeader("Detail Pekerjaan", rightX, panelY, panelW);
 
-  page.drawText(`INVOICE TO: ${sanitize(invoice.client.name).toUpperCase()}`, { x: 345, y: 622, size: 11, font: bold, color: white });
-  wrapText(invoice.client.address, 185, 8, regular).slice(0, 3).forEach((line, index) => {
-    page.drawText(line, { x: 345, y: 607 - index * 12, size: 8, font: regular, color: white });
+  drawText(invoice.client.name, leftX + 10, panelY - 24, 12, bold, navy);
+  wrapText(invoice.client.address, panelW - 20, 9, regular).slice(0, 4).forEach((row, index) => {
+    drawText(row, leftX + 10, panelY - 41 - index * 11, 9, regular, navy);
+  });
+  if (invoice.client.email) drawText(`Email: ${invoice.client.email}`, leftX + 10, panelY - 94, 9, regular, navy);
+  if (invoice.client.phone) drawText(`UP: ${invoice.client.phone}`, leftX + 10, panelY - 108, 9, regular, navy);
+
+  invoiceDocumentMeta(invoice).slice(0, 5).forEach(([label, value], index) => {
+    const y = panelY - 24 - index * 18;
+    const text = `${label}: ${value}`;
+    drawText(text.slice(0, 46), rightX + 18, y, index === 4 ? 11 : 9, index === 4 ? bold : bold, navy);
   });
 
-  const meta = invoiceDocumentMeta(invoice).slice(0, 4);
-  page.drawRectangle({ x: 0, y: 552, width: pageWidth, height: 40, color: cream });
-  meta.forEach(([label, value], index) => {
-    const x = 56 + index * 130;
-    page.drawText(label, { x, y: 576, size: 6.5, font: bold, color: teal });
-    page.drawText(sanitize(value).slice(0, 22), { x, y: 563, size: 8, font: bold, color: navy });
-  });
+  const tableTop = 520;
+  page.drawRectangle({ x: marginX, y: tableTop, width: contentWidth, height: 18, color: navy });
+  drawText("Deskripsi", marginX + 10, tableTop + 4, 11, bold, white);
+  drawText("Harga", 365, tableTop + 4, 11, bold, white);
+  drawText("Qty", 431, tableTop + 4, 11, bold, white);
+  drawText("Total", 493, tableTop + 4, 11, bold, white);
 
-  page.drawRectangle({ x: 0, y: 514, width: pageWidth, height: 38, color: teal });
-  page.drawText("NO.", { x: 82, y: 529, size: 12, font: bold, color: white });
-  page.drawText("DESKRIPSI", { x: 135, y: 529, size: 12, font: bold, color: white });
-  page.drawText("HARGA", { x: 318, y: 529, size: 12, font: bold, color: white });
-  page.drawText("QTY", { x: 400, y: 529, size: 12, font: bold, color: white });
-  page.drawText("TOTAL", { x: 470, y: 529, size: 12, font: bold, color: white });
-
-  let y = 486;
-  invoice.items.slice(0, 8).forEach((item, index) => {
-    page.drawText(String(index + 1).padStart(2, "0"), { x: 86, y, size: 10, font: bold, color: navy });
-    wrapText(item.description, 170, 9, regular).slice(0, 2).forEach((line, lineIndex) => {
-      page.drawText(line, { x: 135, y: y - lineIndex * 11, size: 9, font: regular, color: navy });
+  let y = tableTop - 22;
+  invoice.items.slice(0, 7).forEach((item) => {
+    wrapText(item.description, 285, 10, regular).slice(0, 2).forEach((row, index) => {
+      drawText(row, marginX + 12, y - index * 11, 10, regular, navy);
     });
-    drawRight(formatNumber(item.unitPrice.toNumber()), 362, y, 9, regular, navy);
-    drawRight(String(item.quantity), 420, y, 9, regular, navy);
-    drawRight(formatNumber(item.totalAmount.toNumber()), 520, y, 9, bold, navy);
-    y -= 32;
+    drawRight(formatNumber(item.unitPrice.toNumber()), 393, y, 10, regular, navy);
+    drawRight(String(item.quantity), 452, y, 10, regular, navy);
+    drawRight(formatNumber(item.totalAmount.toNumber()), pageWidth - marginX - 16, y, 10, regular, navy);
+    page.drawLine({ start: { x: marginX, y: y - 13 }, end: { x: pageWidth - marginX, y: y - 13 }, thickness: .6, color: line });
+    y -= 31;
   });
 
-  const totalsY = Math.max(y - 4, 208);
-  drawRight(`SUB TOTAL: ${formatNumber(invoice.subtotal.toNumber())}`, 505, totalsY, 11, bold, teal);
-  drawRight(`PPN ${invoice.taxRate}%: ${formatNumber(invoice.taxAmount.toNumber())}`, 505, totalsY - 18, 9, bold, muted);
-  page.drawRectangle({ x: 390, y: totalsY - 43, width: 115, height: 18, color: accent });
-  drawRight(`TOTAL: ${formatNumber(invoice.grandTotal.toNumber())}`, 500, totalsY - 38, 11, bold, white);
-  let paidY = totalsY - 60;
+  const totalsX = 356;
+  const totalsValueX = pageWidth - marginX - 18;
+  const totalsY = 214;
+  drawText("Subtotal", totalsX, totalsY, 11, bold, navy);
+  drawRight(formatNumber(invoice.subtotal.toNumber()), totalsValueX, totalsY, 11, regular, navy);
+  drawText("PPN", totalsX, totalsY - 20, 11, bold, navy);
+  drawRight(formatNumber(invoice.taxAmount.toNumber()), totalsValueX, totalsY - 20, 11, regular, navy);
+  drawText("DP / Paid Rp", totalsX, totalsY - 40, 11, bold, navy);
+  drawRight(formatNumber(invoice.amountPaid.toNumber()), totalsValueX, totalsY - 40, 11, regular, navy);
   if (invoice.amountPaid.toNumber() > 0) {
-    drawRight(`DP / PAID: ${formatNumber(invoice.amountPaid.toNumber())}`, 505, paidY, 9, bold, muted);
-    paidY -= 16;
-    drawRight(`SISA: ${formatNumber(invoice.outstandingAmount.toNumber())}`, 505, paidY, 9, bold, navy);
+    drawText("Sisa Tagihan", totalsX, totalsY - 60, 10, bold, navy);
+    drawRight(formatNumber(invoice.outstandingAmount.toNumber()), totalsValueX, totalsY - 60, 10, regular, navy);
   }
+  const totalBarY = invoice.amountPaid.toNumber() > 0 ? totalsY - 90 : totalsY - 74;
+  page.drawRectangle({ x: totalsX - 22, y: totalBarY, width: 224, height: 20, color: navy });
+  drawText("Total", totalsX, totalBarY + 5, 11, bold, white);
+  drawRight(formatNumber(invoice.grandTotal.toNumber()), totalsValueX, totalBarY + 5, 11, bold, white);
 
   const words = paymentAwareWords(invoice);
-  page.drawText(words.label, { x: 46, y: 204, size: 8, font: bold, color: teal });
-  page.drawLine({ start: { x: 46, y: 199 }, end: { x: 232, y: 199 }, thickness: 1.2, color: teal });
-  wrapText(words.text, 210, 9, bold).slice(0, 2).forEach((line, index) => {
-    page.drawText(line, { x: 46, y: 185 - index * 12, size: 9, font: bold, color: navy });
-  });
+  drawText(`${words.label}: ${words.text}`, marginX - 10, 130, 12, bold, rgb(0, 0, 0));
 
+  const payY = 91;
+  sectionHeader("Payment Info", marginX - 10, payY, 226);
   const accounts = paymentAccounts(invoice);
-  page.drawText("Payment details:", { x: 46, y: 146, size: 12, font: regular, color: navy });
-  page.drawLine({ start: { x: 46, y: 140 }, end: { x: 230, y: 140 }, thickness: 1.4, color: teal });
-  page.drawText(`Invoice no: ${invoice.invoiceNumber}`, { x: 46, y: 126, size: 9, font: regular, color: navy });
-  accounts.slice(0, 2).forEach((account, index) => {
-    page.drawText(`${sanitize(account.bankName)}: ${sanitize(account.accountNumber)}`, { x: 46, y: 112 - index * 12, size: 9, font: regular, color: navy });
-    page.drawText(`a.n. ${sanitize(account.accountName)}`, { x: 46, y: 100 - index * 12, size: 9, font: regular, color: navy });
-  });
-  if (!accounts.length) {
-    page.drawText("Belum ada rekening pembayaran.", { x: 46, y: 112, size: 9, font: regular, color: navy });
+  if (accounts.length) {
+    const account = accounts[0];
+    drawText(account.bankName, marginX, payY - 24, 10, regular, navy);
+    drawText(account.accountNumber, marginX, payY - 38, 10, regular, navy);
+    drawText(account.accountName, marginX, payY - 52, 10, regular, navy);
+  } else {
+    drawText("Belum ada rekening pembayaran.", marginX, payY - 24, 10, regular, navy);
   }
 
-  page.drawText(invoice.company.name, { x: 46, y: 72, size: 11, font: bold, color: navy });
-  page.drawLine({ start: { x: 46, y: 66 }, end: { x: 230, y: 66 }, thickness: 1.4, color: teal });
-  wrapText(invoice.company.address, 235, 8, regular).slice(0, 2).forEach((line, index) => {
-    page.drawText(line, { x: 46, y: 52 - index * 11, size: 8, font: regular, color: navy });
-  });
-
-  page.drawText(sanitize(invoice.company.closingGreeting || "Hormat kami"), { x: 410, y: 140, size: 9, font: regular, color: navy });
+  drawText("Thank you!", marginX - 6, 28, 24, bold, red);
+  drawText(sanitize(invoice.company.closingGreeting || "Hormat kami"), 420, 64, 11, bold, navy);
   if (signatureImage) {
-    const signatureSize = fitImage(signatureImage.width, signatureImage.height, 120, 55);
-    page.drawImage(signatureImage, { x: 395, y: 78, width: signatureSize.width, height: signatureSize.height });
+    const signatureSize = fitImage(signatureImage.width, signatureImage.height, 112, 50);
+    page.drawImage(signatureImage, { x: 398, y: 76, width: signatureSize.width, height: signatureSize.height });
   }
-  page.drawLine({ start: { x: 390, y: 74 }, end: { x: 505, y: 74 }, thickness: 1.2, color: navy });
-  drawCentered(invoice.company.signerName || invoice.company.name, 447, 58, 11, bold, navy);
-  if (invoice.company.signerTitle) {
-    drawCentered(invoice.company.signerTitle, 447, 44, 9, regular, navy);
-  }
+  drawText(sanitize(invoice.company.signerName || invoice.company.name), 390, 38, 10, bold, navy);
+  if (invoice.company.signerTitle) drawText(sanitize(invoice.company.signerTitle), 390, 24, 9, regular, navy);
 
-  drawCentered("Logisflow Smart Logistics Flow", pageWidth / 2, 13, 8, regular, white);
   const bytes = await pdf.save();
   await fs.writeFile(filePath, bytes);
 }
