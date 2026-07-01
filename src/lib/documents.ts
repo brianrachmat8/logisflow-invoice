@@ -61,10 +61,13 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
   const navy = rgb(0.04, 0.09, 0.22);
   const blue = rgb(0.1, 0.4, 1);
   const muted = rgb(0.42, 0.46, 0.55);
-  let y = 780;
-  const draw = (text: string, x: number, size = 9, font = regular, color = navy) => {
-    page.drawText(sanitize(text), { x, y, size, font, color });
-  };
+  const border = rgb(.86, .89, .94);
+  const soft = rgb(.97, .98, 1);
+  const labelColor = rgb(.43, .49, .61);
+  const white = rgb(1, 1, 1);
+  const marginX = 32;
+  const pageRight = 563;
+
   const drawTextAt = (text: string, x: number, yy: number, size = 9, font = regular, color = navy) => {
     page.drawText(sanitize(text), { x, y: yy, size, font, color });
   };
@@ -72,95 +75,99 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
     const safe = sanitize(text);
     page.drawText(safe, { x: rightX - font.widthOfTextAtSize(safe, size), y: yy, size, font, color });
   };
-  page.drawRectangle({ x: 0, y: 805, width: 595.28, height: 37, color: navy });
+  const drawWrapped = (text: string, x: number, yy: number, maxWidth: number, size = 8, font = regular, color = muted, maxLines = 3, lineGap = 11) => {
+    const lines = wrapText(text, maxWidth, size, font).slice(0, maxLines);
+    lines.forEach((line, index) => drawTextAt(line, x, yy - index * lineGap, size, font, color));
+    return lines.length;
+  };
+
   if (logoImage) {
-    const logoSize = fitImage(logoImage.width, logoImage.height, 54, 40);
-    page.drawImage(logoImage, { x: 38, y: 758 + (42 - logoSize.height) / 2, width: logoSize.width, height: logoSize.height });
+    const logoSize = fitImage(logoImage.width, logoImage.height, 48, 42);
+    page.drawImage(logoImage, { x: marginX, y: 758 + (42 - logoSize.height) / 2, width: logoSize.width, height: logoSize.height });
   } else {
-    page.drawRectangle({ x: 38, y: 758, width: 42, height: 42, color: blue });
+    page.drawRectangle({ x: marginX, y: 758, width: 42, height: 42, color: blue });
+    drawTextAt("LF", marginX + 13, 774, 11, bold, white);
   }
-  draw(invoice.company.name, 94, 15, bold); y -= 18;
-  wrapText(invoice.company.address, 300, 8, regular).slice(0, 2).forEach((line, index) => {
-    drawTextAt(line, 94, 762 - index * 11, 8, regular, muted);
-  });
-  drawRight("INVOICE", 557, 775, 20, bold, navy);
-  y = 720;
-  draw("DITAGIHKAN KEPADA", 38, 8, bold, muted); y -= 19;
-  draw(invoice.client.name, 38, 12, bold); y -= 16;
-  wrapText(invoice.client.address, 300, 8, regular).slice(0, 3).forEach((line, index) => {
-    drawTextAt(line, 38, 694 - index * 12, 8, regular, muted);
-  });
-  page.drawText(`No: ${invoice.invoiceNumber}`, { x: 350, y: 720, size: 9, font: bold, color: navy });
-  page.drawText(`Tanggal: ${tanggal.format(invoice.invoiceDate)}`, { x: 350, y: 704, size: 8, font: regular, color: muted });
-  page.drawText(`Jatuh tempo: ${tanggal.format(invoice.dueDate)}`, { x: 350, y: 689, size: 8, font: regular, color: muted });
 
-  y = 640;
-  const meta = [
-    [invoice.shipment.shipmentDirection === "EXPORT" ? "DO NUMBER (EXPORT)" : "B/L NUMBER (IMPORT)", invoice.shipment.doNumber],
-    ["VESSEL / VOYAGE", `${invoice.shipment.vessel} / ${invoice.shipment.voyage}`],
-    ["CARRIER", invoice.shipment.carrier?.name || "-"],
-    ["B/L NUMBER (IMPOR)", invoiceBlLabel(invoice)],
-    ["SIZE 20/40", summarizeContainerSizes(invoice.shipment.containers)],
-  ];
-  page.drawRectangle({ x: 38, y: 556, width: 519, height: 101, color: rgb(.97, .98, 1) });
+  drawTextAt(invoice.company.name, 90, 782, 12, bold, navy);
+  drawWrapped(invoice.company.address, 90, 764, 240, 7.5, regular, muted, 3, 10);
+  drawRight("INVOICE", pageRight, 782, 21, bold, navy);
+  drawRight(invoice.invoiceNumber || invoice.draftNumber, pageRight, 759, 10, bold, navy);
+  drawRight(tanggal.format(invoice.invoiceDate), pageRight, 741, 8, regular, muted);
+
+  const panelTop = 704;
+  const panelHeight = 118;
+  page.drawRectangle({ x: marginX, y: panelTop - panelHeight, width: 531, height: panelHeight, color: soft, borderColor: border, borderWidth: .4 });
+  drawTextAt("DITAGIHKAN KEPADA", 48, 674, 7.5, bold, labelColor);
+  drawTextAt(invoice.client.name, 48, 653, 12, bold, navy);
+  drawWrapped(invoice.client.address, 48, 632, 240, 7.5, regular, muted, 4, 11);
+
+  const meta = pdfMetaRows(invoice);
   meta.forEach(([label, value], index) => {
-    const x = 52 + (index % 2) * 255;
-    const yy = 634 - Math.floor(index / 2) * 31;
-    page.drawText(label, { x, y: yy, size: 7, font: bold, color: muted });
-    page.drawText(sanitize(value).slice(0, 31), { x, y: yy - 13, size: 9, font: bold, color: navy });
+    const rowY = 675 - index * 24;
+    drawTextAt(label, 320, rowY, 7.2, bold, labelColor);
+    drawRight(sanitize(value).slice(0, 34), 545, rowY - 13, 8.2, bold, navy);
   });
 
-  y = 520;
-  page.drawRectangle({ x: 38, y: y - 5, width: 519, height: 26, color: navy });
-  const cols = [48, 260, 345, 430, 545];
-  ["DESKRIPSI", "QTY", "HARGA", "TOTAL"].forEach((label, i) => {
-    page.drawText(label, { x: cols[i], y: y + 5, size: 7, font: bold, color: rgb(1,1,1) });
-  });
-  y -= 30;
+  let tableY = 545;
+  page.drawRectangle({ x: marginX, y: tableY - 4, width: 531, height: 28, color: navy });
+  drawTextAt("DESKRIPSI", 44, tableY + 6, 7, bold, white);
+  drawRight("QTY", 348, tableY + 6, 7, bold, white);
+  drawRight("HARGA", 443, tableY + 6, 7, bold, white);
+  drawRight("TOTAL", 552, tableY + 6, 7, bold, white);
+  tableY -= 30;
+
   for (const item of invoice.items.slice(0, 14)) {
-    page.drawText(sanitize(item.description).slice(0, 48), { x: 48, y, size: 8, font: regular, color: navy });
-    drawRight(String(item.quantity), 270, y, 8, regular, navy);
-    drawRight(formatNumber(item.unitPrice.toNumber()), 395, y, 8, regular, navy);
-    drawRight(formatNumber(item.totalAmount.toNumber()), 505, y, 8, bold, navy);
-    page.drawLine({ start: { x: 38, y: y - 8 }, end: { x: 557, y: y - 8 }, thickness: .4, color: rgb(.88,.9,.94) });
-    y -= 24;
+    const lines = wrapText(item.description, 250, 8, regular).slice(0, 3);
+    const rowHeight = Math.max(26, 13 + lines.length * 11);
+    lines.forEach((line, index) => drawTextAt(line, 44, tableY - index * 10, 8, regular, navy));
+    drawRight(String(item.quantity), 348, tableY, 8, regular, navy);
+    drawRight(formatNumber(item.unitPrice.toNumber()), 443, tableY, 8, regular, navy);
+    drawRight(formatNumber(item.totalAmount.toNumber()), 552, tableY, 8, bold, navy);
+    page.drawLine({ start: { x: marginX, y: tableY - rowHeight + 8 }, end: { x: 563, y: tableY - rowHeight + 8 }, thickness: .4, color: border });
+    tableY -= rowHeight;
   }
-  y -= 12;
+
+  const totalsTop = Math.min(tableY - 8, 420);
+  const totalsX = 342;
+  const totalsRight = 552;
   const totals = [
     ["Subtotal", invoice.subtotal.toNumber()],
     [`PPN ${invoice.taxRate}%`, invoice.taxAmount.toNumber()],
-    ["Grand Total", invoice.grandTotal.toNumber()],
+    ["Grand total", invoice.grandTotal.toNumber()],
     ...(invoice.amountPaid.toNumber() > 0 ? [["DP / Paid", invoice.amountPaid.toNumber()]] as [string, number][] : []),
-    ...(invoice.outstandingAmount.toNumber() > 0 && invoice.amountPaid.toNumber() > 0 ? [["Sisa Tagihan", invoice.outstandingAmount.toNumber()]] as [string, number][] : []),
+    ...(invoice.outstandingAmount.toNumber() > 0 ? [["Sisa tagihan", invoice.outstandingAmount.toNumber()]] as [string, number][] : []),
   ];
   totals.forEach(([label, amount], index) => {
-    page.drawText(String(label), { x: 365, y: y - index * 22, size: index === 2 ? 10 : 8, font: index === 2 ? bold : regular, color: navy });
-    drawRight(formatNumber(Number(amount)), 520, y - index * 22, index === 2 ? 10 : 8, bold, index === 2 ? blue : navy);
+    const yy = totalsTop - index * 21;
+    const isGrandTotal = String(label).toLowerCase() === "grand total";
+    if (isGrandTotal) page.drawLine({ start: { x: totalsX, y: yy + 15 }, end: { x: totalsRight, y: yy + 15 }, thickness: .6, color: border });
+    drawTextAt(String(label), totalsX, yy, isGrandTotal ? 9 : 8, isGrandTotal ? bold : regular, isGrandTotal ? navy : muted);
+    drawRight(formatNumber(Number(amount)), totalsRight, yy, isGrandTotal ? 10 : 8, bold, isGrandTotal ? blue : navy);
   });
+
   const words = paymentAwareWords(invoice);
-  page.drawText(words.label, { x: 38, y, size: 7, font: bold, color: muted });
-  wrapText(words.text, 300, 8, bold).slice(0, 2).forEach((line, index) => {
-    page.drawText(sanitize(line), { x: 38, y: y - 18 - index * 12, size: 8, font: bold, color: navy });
-  });
+  const wordsY = Math.min(totalsTop - totals.length * 21 - 24, 315);
+  page.drawLine({ start: { x: marginX, y: wordsY + 22 }, end: { x: 563, y: wordsY + 22 }, thickness: .5, color: border });
+  drawTextAt(words.label, marginX, wordsY, 7.5, bold, labelColor);
+  drawWrapped(words.text, marginX, wordsY - 20, 300, 10, bold, navy, 3, 13);
+
   const accounts = paymentAccounts(invoice);
-  page.drawText("Rekening pembayaran:", { x: 38, y: 118, size: 8, font: bold, color: muted });
+  const paymentY = 138;
+  drawTextAt("REKENING PEMBAYARAN", marginX, paymentY, 7.5, bold, labelColor);
   accounts.slice(0, 3).forEach((account, index) => {
-    page.drawText(`${sanitize(account.bankName)}${account.isPrimary ? " (Utama)" : ""}: ${sanitize(account.accountNumber)} a.n. ${sanitize(account.accountName)}`, {
-      x: 38, y: 104 - index * 12, size: 8, font: regular, color: muted,
-    });
+    drawWrapped(`${account.bankName}${account.isPrimary ? " (Utama)" : ""}: ${account.accountNumber} a.n. ${account.accountName}`, marginX, paymentY - 17 - index * 14, 285, 7.8, regular, muted, 1, 10);
   });
-  if (!accounts.length) {
-    page.drawText("Belum ada rekening pembayaran.", { x: 38, y: 104, size: 8, font: regular, color: muted });
-  }
-  page.drawText(sanitize(invoice.company.closingGreeting || "Hormat kami"), { x: 405, y: 126, size: 8, font: regular, color: navy });
+  if (!accounts.length) drawTextAt("Belum ada rekening pembayaran.", marginX, paymentY - 17, 7.8, regular, muted);
+
+  drawTextAt(sanitize(invoice.company.closingGreeting || "Hormat kami"), 405, 136, 8, regular, navy);
   if (signatureImage) {
     const signatureSize = fitImage(signatureImage.width, signatureImage.height, 120, 48);
-    page.drawImage(signatureImage, { x: 395, y: 68, width: signatureSize.width, height: signatureSize.height });
+    page.drawImage(signatureImage, { x: 395, y: 75, width: signatureSize.width, height: signatureSize.height });
   }
-  page.drawText(sanitize(invoice.company.signerName || invoice.company.name), { x: 385, y: 45, size: 8, font: bold, color: navy });
-  if (invoice.company.signerTitle) {
-    page.drawText(sanitize(invoice.company.signerTitle), { x: 385, y: 33, size: 7, font: regular, color: muted });
-  }
+  drawTextAt(sanitize(invoice.company.signerName || invoice.company.name), 385, 52, 8, bold, navy);
+  if (invoice.company.signerTitle) drawTextAt(sanitize(invoice.company.signerTitle), 385, 40, 7, regular, muted);
+
   const bytes = await pdf.save();
   await fs.writeFile(filePath, bytes);
 }
@@ -193,14 +200,14 @@ async function buildExcel(invoice: InvoiceDocument, filePath: string) {
   sheet.getCell("E5").value = tanggal.format(invoice.dueDate);
   sheet.getCell("A7").value = "Kepada";
   sheet.getCell("B7").value = invoice.client.name;
-  sheet.getCell("A8").value = invoice.shipment.shipmentDirection === "EXPORT" ? "DO Number (Export)" : "B/L Number (Import)";
-  sheet.getCell("B8").value = invoice.shipment.doNumber;
-  sheet.getCell("A9").value = "Vessel/Voyage";
-  sheet.getCell("B9").value = `${invoice.shipment.vessel} / ${invoice.shipment.voyage}`;
-  sheet.getCell("D8").value = "B/L Number (Impor)";
-  sheet.getCell("E8").value = invoiceBlLabel(invoice);
-  sheet.getCell("D9").value = "Size 20/40";
-  sheet.getCell("E9").value = summarizeContainerSizes(invoice.shipment.containers);
+  excelMetaRows(invoice).forEach(([label, value], index) => {
+    const row = 8 + index;
+    const labelColumn = index < 2 ? "A" : "D";
+    const valueColumn = index < 2 ? "B" : "E";
+    const normalizedRow = index < 2 ? row : row - 2;
+    sheet.getCell(`${labelColumn}${normalizedRow}`).value = label;
+    sheet.getCell(`${valueColumn}${normalizedRow}`).value = value;
+  });
 
   const headerRow = sheet.getRow(11);
   headerRow.values = ["No", "Deskripsi", "Qty", "Harga Satuan", "Total"];
@@ -295,7 +302,43 @@ function fitImage(width: number, height: number, maxWidth: number, maxHeight: nu
   return { width: width * scale, height: height * scale };
 }
 
+function pdfMetaRows(invoice: InvoiceDocument): [string, string][] {
+  if (invoice.shipment.shipmentDirection === "LAIN_LAIN") {
+    return [
+      ["REFERENSI", invoice.shipment.doNumber || "-"],
+      ["PEKERJAAN", `${invoice.shipment.vessel || "-"}${invoice.shipment.voyage ? ` / ${invoice.shipment.voyage}` : ""}`],
+      ["TIPE ORDER", "Lain-lain"],
+      ["CARRIER", invoice.shipment.carrier?.name || "-"],
+    ];
+  }
+  return [
+    [invoice.shipment.shipmentDirection === "EXPORT" ? "DO NUMBER (EXPORT)" : "B/L NUMBER (IMPORT)", invoice.shipment.doNumber],
+    ["VESSEL / VOYAGE", `${invoice.shipment.vessel} / ${invoice.shipment.voyage}`],
+    ["CARRIER", invoice.shipment.carrier?.name || "-"],
+    ["B/L NUMBER (IMPOR)", invoiceBlLabel(invoice)],
+    ["SIZE 20/40", summarizeContainerSizes(invoice.shipment.containers)],
+  ];
+}
+
+function excelMetaRows(invoice: InvoiceDocument): [string, string][] {
+  if (invoice.shipment.shipmentDirection === "LAIN_LAIN") {
+    return [
+      ["Referensi", invoice.shipment.doNumber || "-"],
+      ["Pekerjaan", `${invoice.shipment.vessel || "-"}${invoice.shipment.voyage ? ` / ${invoice.shipment.voyage}` : ""}`],
+      ["Tipe order", "Lain-lain"],
+      ["Carrier", invoice.shipment.carrier?.name || "-"],
+    ];
+  }
+  return [
+    [invoice.shipment.shipmentDirection === "EXPORT" ? "DO Number (Export)" : "B/L Number (Import)", invoice.shipment.doNumber],
+    ["Vessel/Voyage", `${invoice.shipment.vessel} / ${invoice.shipment.voyage}`],
+    ["B/L Number (Impor)", invoiceBlLabel(invoice)],
+    ["Size 20/40", summarizeContainerSizes(invoice.shipment.containers)],
+  ];
+}
+
 function invoiceBlLabel(invoice: InvoiceDocument) {
+  if (invoice.shipment.shipmentDirection === "LAIN_LAIN") return invoice.shipment.doNumber || "-";
   if (invoice.bill?.number) return invoice.bill.number;
   return invoice.type === "JASA" ? "Gabungan" : "Reimbursement Gabungan";
 }
