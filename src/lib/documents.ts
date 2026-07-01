@@ -95,13 +95,7 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
   page.drawText(`Jatuh tempo: ${tanggal.format(invoice.dueDate)}`, { x: 350, y: 689, size: 8, font: regular, color: muted });
 
   y = 640;
-  const meta = [
-    [invoice.shipment.shipmentDirection === "EXPORT" ? "DO NUMBER (EXPORT)" : "B/L NUMBER (IMPORT)", invoice.shipment.doNumber],
-    ["VESSEL / VOYAGE", `${invoice.shipment.vessel} / ${invoice.shipment.voyage}`],
-    ["CARRIER", invoice.shipment.carrier?.name || "-"],
-    ["B/L NUMBER (IMPOR)", invoiceBlLabel(invoice)],
-    ["SIZE 20/40", summarizeContainerSizes(invoice.shipment.containers)],
-  ];
+  const meta = invoiceDocumentMeta(invoice);
   page.drawRectangle({ x: 38, y: 556, width: 519, height: 101, color: rgb(.97, .98, 1) });
   meta.forEach(([label, value], index) => {
     const x = 52 + (index % 2) * 255;
@@ -193,14 +187,13 @@ async function buildExcel(invoice: InvoiceDocument, filePath: string) {
   sheet.getCell("E5").value = tanggal.format(invoice.dueDate);
   sheet.getCell("A7").value = "Kepada";
   sheet.getCell("B7").value = invoice.client.name;
-  sheet.getCell("A8").value = invoice.shipment.shipmentDirection === "EXPORT" ? "DO Number (Export)" : "B/L Number (Import)";
-  sheet.getCell("B8").value = invoice.shipment.doNumber;
-  sheet.getCell("A9").value = "Vessel/Voyage";
-  sheet.getCell("B9").value = `${invoice.shipment.vessel} / ${invoice.shipment.voyage}`;
-  sheet.getCell("D8").value = "B/L Number (Impor)";
-  sheet.getCell("E8").value = invoiceBlLabel(invoice);
-  sheet.getCell("D9").value = "Size 20/40";
-  sheet.getCell("E9").value = summarizeContainerSizes(invoice.shipment.containers);
+  invoiceDocumentMeta(invoice).slice(0, 4).forEach(([label, value], index) => {
+    const row = 8 + (index % 2);
+    const labelColumn = index < 2 ? "A" : "D";
+    const valueColumn = index < 2 ? "B" : "E";
+    sheet.getCell(`${labelColumn}${row}`).value = label;
+    sheet.getCell(`${valueColumn}${row}`).value = value;
+  });
 
   const headerRow = sheet.getRow(11);
   headerRow.values = ["No", "Deskripsi", "Qty", "Harga Satuan", "Total"];
@@ -295,8 +288,36 @@ function fitImage(width: number, height: number, maxWidth: number, maxHeight: nu
   return { width: width * scale, height: height * scale };
 }
 
+function invoiceDocumentMeta(invoice: InvoiceDocument): [string, string][] {
+  if (invoice.shipment.shipmentDirection === "LAIN_LAIN") {
+    return [
+      ["REFERENSI", invoice.shipment.doNumber || "-"],
+      ["JENIS PEKERJAAN", shipmentWorkLabel(invoice)],
+      ["CARRIER / TIM", invoice.shipment.carrier?.name || "-"],
+      ["TAGIHAN", invoiceBlLabel(invoice)],
+      ["JENIS ORDER", "Lain-lain"],
+    ];
+  }
+
+  return [
+    [invoice.shipment.shipmentDirection === "EXPORT" ? "DO NUMBER (EXPORT)" : "B/L NUMBER (IMPORT)", invoice.shipment.doNumber],
+    ["VESSEL / VOYAGE", `${invoice.shipment.vessel} / ${invoice.shipment.voyage}`],
+    ["CARRIER", invoice.shipment.carrier?.name || "-"],
+    ["B/L NUMBER (IMPOR)", invoiceBlLabel(invoice)],
+    ["SIZE 20/40", summarizeContainerSizes(invoice.shipment.containers)],
+  ];
+}
+
+function shipmentWorkLabel(invoice: InvoiceDocument) {
+  const name = invoice.shipment.vessel?.trim();
+  const reference = invoice.shipment.voyage?.trim();
+  if (name && reference) return `${name} / ${reference}`;
+  return name || reference || "-";
+}
+
 function invoiceBlLabel(invoice: InvoiceDocument) {
   if (invoice.bill?.number) return invoice.bill.number;
+  if (invoice.shipment.shipmentDirection === "LAIN_LAIN") return invoice.type === "JASA" ? "Jasa Gabungan" : "Reimbursement Gabungan";
   return invoice.type === "JASA" ? "Gabungan" : "Reimbursement Gabungan";
 }
 
