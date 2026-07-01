@@ -60,7 +60,6 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
   const signatureImage = await embedPdfImage(pdf, invoice.company.signaturePath);
   const navy = rgb(0.06, 0.11, 0.31);
   const red = rgb(0.86, 0.07, 0.14);
-  const muted = rgb(0.34, 0.38, 0.52);
   const line = rgb(0.66, 0.7, 0.8);
   const white = rgb(1, 1, 1);
   const pageWidth = 595.28;
@@ -109,9 +108,8 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
   if (invoice.client.phone) drawText(`UP: ${invoice.client.phone}`, leftX + 10, panelY - 108, 9, regular, navy);
 
   invoiceDocumentMeta(invoice).slice(0, 5).forEach(([label, value], index) => {
-    const y = panelY - 24 - index * 18;
-    const text = `${label}: ${value}`;
-    drawText(text.slice(0, 46), rightX + 18, y, index === 4 ? 11 : 9, index === 4 ? bold : bold, navy);
+    const rowY = panelY - 24 - index * 18;
+    drawText(`${label}: ${value}`.slice(0, 46), rightX + 18, rowY, index === 4 ? 11 : 9, bold, navy);
   });
 
   const tableTop = 520;
@@ -135,26 +133,27 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
 
   const totalsX = 356;
   const totalsValueX = pageWidth - marginX - 18;
-  const totalsY = 214;
+  const totalsY = Math.max(y - 16, 252);
   drawText("Subtotal", totalsX, totalsY, 11, bold, navy);
   drawRight(formatNumber(invoice.subtotal.toNumber()), totalsValueX, totalsY, 11, regular, navy);
   drawText("PPN", totalsX, totalsY - 20, 11, bold, navy);
   drawRight(formatNumber(invoice.taxAmount.toNumber()), totalsValueX, totalsY - 20, 11, regular, navy);
-  drawText("DP / Paid Rp", totalsX, totalsY - 40, 11, bold, navy);
+  drawText("DP / Paid", totalsX, totalsY - 40, 11, bold, navy);
   drawRight(formatNumber(invoice.amountPaid.toNumber()), totalsValueX, totalsY - 40, 11, regular, navy);
-  if (invoice.amountPaid.toNumber() > 0) {
-    drawText("Sisa Tagihan", totalsX, totalsY - 60, 10, bold, navy);
-    drawRight(formatNumber(invoice.outstandingAmount.toNumber()), totalsValueX, totalsY - 60, 10, regular, navy);
-  }
-  const totalBarY = invoice.amountPaid.toNumber() > 0 ? totalsY - 90 : totalsY - 74;
+
+  const totalBarY = totalsY - 72;
   page.drawRectangle({ x: totalsX - 22, y: totalBarY, width: 224, height: 20, color: navy });
   drawText("Total", totalsX, totalBarY + 5, 11, bold, white);
   drawRight(formatNumber(invoice.grandTotal.toNumber()), totalsValueX, totalBarY + 5, 11, bold, white);
+  const outstandingY = totalBarY - 20;
+  drawText("Sisa Tagihan", totalsX - 22, outstandingY, 10, bold, navy);
+  drawRight(formatNumber(invoice.outstandingAmount.toNumber()), totalsValueX, outstandingY, 10, regular, navy);
 
   const words = paymentAwareWords(invoice);
-  drawText(`${words.label}: ${words.text}`, marginX - 10, 130, 12, bold, rgb(0, 0, 0));
+  const wordsY = Math.max(outstandingY - 34, 136);
+  drawText(`${words.label}: ${words.text}`, marginX - 10, wordsY, 12, bold, rgb(0, 0, 0));
 
-  const payY = 91;
+  const payY = Math.max(wordsY - 48, 88);
   sectionHeader("Payment Info", marginX - 10, payY, 226);
   const accounts = paymentAccounts(invoice);
   if (accounts.length) {
@@ -166,14 +165,16 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
     drawText("Belum ada rekening pembayaran.", marginX, payY - 24, 10, regular, navy);
   }
 
-  drawText("Thank you!", marginX - 6, 28, 24, bold, red);
-  drawText(sanitize(invoice.company.closingGreeting || "Hormat kami"), 420, 64, 11, bold, navy);
+  const signY = Math.max(payY - 4, 74);
+  drawText(sanitize(invoice.company.closingGreeting || "Hormat kami"), 420, signY, 11, bold, navy);
   if (signatureImage) {
-    const signatureSize = fitImage(signatureImage.width, signatureImage.height, 112, 50);
-    page.drawImage(signatureImage, { x: 398, y: 76, width: signatureSize.width, height: signatureSize.height });
+    const signatureSize = fitImage(signatureImage.width, signatureImage.height, 112, 42);
+    page.drawImage(signatureImage, { x: 398, y: signY - 48, width: signatureSize.width, height: signatureSize.height });
   }
-  drawText(sanitize(invoice.company.signerName || invoice.company.name), 390, 38, 10, bold, navy);
-  if (invoice.company.signerTitle) drawText(sanitize(invoice.company.signerTitle), 390, 24, 9, regular, navy);
+  drawText(sanitize(invoice.company.signerName || invoice.company.name), 390, signY - 60, 10, bold, navy);
+  if (invoice.company.signerTitle) drawText(sanitize(invoice.company.signerTitle), 390, signY - 74, 9, regular, navy);
+
+  drawText("Thank you!", marginX - 6, 28, 24, bold, red);
 
   const bytes = await pdf.save();
   await fs.writeFile(filePath, bytes);
@@ -362,11 +363,9 @@ function paymentAccounts(invoice: InvoiceDocument) {
 }
 
 function paymentAwareWords(invoice: InvoiceDocument) {
-  const amountPaid = invoice.amountPaid.toNumber();
-  const amount = amountPaid > 0 ? invoice.outstandingAmount.toNumber() : invoice.grandTotal.toNumber();
   return {
-    label: amountPaid > 0 ? "TERBILANG SISA TAGIHAN" : "TERBILANG",
-    text: terbilang(amount),
+    label: "TERBILANG",
+    text: terbilang(invoice.grandTotal.toNumber()),
   };
 }
 
