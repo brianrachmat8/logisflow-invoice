@@ -85,7 +85,7 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
     const logoSize = fitImage(logoImage.width, logoImage.height, 48, 42);
     page.drawImage(logoImage, { x: marginX, y: 758 + (42 - logoSize.height) / 2, width: logoSize.width, height: logoSize.height });
   } else {
-    page.drawRectangle({ x: marginX, y: 758, width: 42, height: 42, color: blue, borderRadius: 8 });
+    page.drawRectangle({ x: marginX, y: 758, width: 42, height: 42, color: blue });
     drawTextAt("LF", marginX + 13, 774, 11, bold, white);
   }
 
@@ -97,7 +97,7 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
 
   const panelTop = 704;
   const panelHeight = 118;
-  page.drawRectangle({ x: marginX, y: panelTop - panelHeight, width: 531, height: panelHeight, color: soft, borderColor: border, borderWidth: .4, borderRadius: 8 });
+  page.drawRectangle({ x: marginX, y: panelTop - panelHeight, width: 531, height: panelHeight, color: soft, borderColor: border, borderWidth: .4 });
   drawTextAt("DITAGIHKAN KEPADA", 48, 674, 7.5, bold, labelColor);
   drawTextAt(invoice.client.name, 48, 653, 12, bold, navy);
   drawWrapped(invoice.client.address, 48, 632, 240, 7.5, regular, muted, 4, 11);
@@ -110,7 +110,7 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
   });
 
   let tableY = 545;
-  page.drawRectangle({ x: marginX, y: tableY - 4, width: 531, height: 28, color: navy, borderRadius: 4 });
+  page.drawRectangle({ x: marginX, y: tableY - 4, width: 531, height: 28, color: navy });
   drawTextAt("DESKRIPSI", 44, tableY + 6, 7, bold, white);
   drawRight("QTY", 348, tableY + 6, 7, bold, white);
   drawRight("HARGA", 443, tableY + 6, 7, bold, white);
