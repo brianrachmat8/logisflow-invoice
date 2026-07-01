@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
-import { Anchor, ArrowRight, Boxes, FileCheck2, ShieldCheck } from "lucide-react";
+import { ArrowRight, Boxes, FileCheck2, ShieldCheck } from "lucide-react";
 import { auth, signIn } from "@/auth";
+import { BrandLogo } from "@/components/brand-logo";
 
 export default async function LoginPage({
   searchParams,
@@ -23,10 +24,7 @@ export default async function LoginPage({
   return (
     <main className="auth-page">
       <section className="auth-visual">
-        <div className="brand">
-          <span className="brand-mark"><Anchor size={21} /></span>
-          <span>LOGISFLOW</span>
-        </div>
+        <BrandLogo tone="light" showTagline />
         <div className="hero-copy">
           <h1>Invoice logistik, tanpa drama spreadsheet.</h1>
           <p>
@@ -43,6 +41,7 @@ export default async function LoginPage({
       </section>
       <section className="auth-panel">
         <div className="auth-card">
+          <BrandLogo className="auth-card-logo" tone="dark" compact />
           <h2>Selamat datang</h2>
           <p>Masuk untuk melanjutkan pekerjaan Anda.</p>
           {params.error && (
