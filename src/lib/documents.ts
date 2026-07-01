@@ -81,8 +81,12 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
   page.drawRectangle({ x: 0, y: 0, width: pageWidth, height: 841.89, color: white });
 
   if (logoImage) {
-    const logoSize = fitImage(logoImage.width, logoImage.height, 112, 54);
+    const logoSize = fitImage(logoImage.width, logoImage.height, 70, 50);
     page.drawImage(logoImage, { x: marginX, y: 764, width: logoSize.width, height: logoSize.height });
+    drawText(invoice.company.name, marginX + logoSize.width + 14, 784, 16, bold, navy);
+    wrapText(invoice.company.address, 210, 7, regular).slice(0, 1).forEach((row) => {
+      drawText(row, marginX + logoSize.width + 14, 771, 7, regular, navy);
+    });
   } else {
     page.drawRectangle({ x: marginX, y: 782, width: 22, height: 22, color: red });
     drawText(invoice.company.name, marginX + 36, 779, 20, bold, navy);
@@ -363,9 +367,11 @@ function paymentAccounts(invoice: InvoiceDocument) {
 }
 
 function paymentAwareWords(invoice: InvoiceDocument) {
+  const amountPaid = invoice.amountPaid.toNumber();
+  const amount = amountPaid > 0 ? invoice.outstandingAmount.toNumber() : invoice.grandTotal.toNumber();
   return {
     label: "TERBILANG",
-    text: terbilang(invoice.grandTotal.toNumber()),
+    text: terbilang(amount),
   };
 }
 
