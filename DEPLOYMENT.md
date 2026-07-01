@@ -78,10 +78,10 @@ Tunggu propagasi DNS. Bisa beberapa menit sampai beberapa jam.
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-Terapkan schema database:
+Saat aplikasi naik, migration database otomatis dijalankan sebelum container aplikasi start. Jika perlu menjalankan migration secara manual:
 
 ```bash
-docker compose -f docker-compose.prod.yml --profile tools run --rm migrate
+docker compose -f docker-compose.prod.yml run --rm migrate
 ```
 
 Untuk instalasi pertama, isi akun admin demo:
@@ -165,7 +165,6 @@ Di VPS:
 ```bash
 cd /opt/logisflow
 docker compose -f docker-compose.prod.yml up -d --build
-docker compose -f docker-compose.prod.yml --profile tools run --rm migrate
 ```
 
 ## Catatan keamanan
