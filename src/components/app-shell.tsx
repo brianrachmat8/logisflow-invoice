@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
-  Activity, Anchor, BarChart3, Bell, Building2, ChevronDown, CircleDollarSign,
+  Activity, BarChart3, Bell, Building2, ChevronDown, CircleDollarSign,
   FileSpreadsheet, LayoutDashboard, Menu, ReceiptText, Settings, Ship, Users,
 } from "lucide-react";
 import { auth, signOut } from "@/auth";
+import { BrandLogo } from "@/components/brand-logo";
 
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -41,9 +42,8 @@ export async function AppShell({ children, title }: { children: React.ReactNode;
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <Link className="brand" href="/dashboard">
-          <span className="brand-mark"><Anchor size={21} /></span>
-          <span>LOGISFLOW</span>
+        <Link className="brand app-brand" href="/dashboard">
+          <BrandLogo tone="light" compact />
         </Link>
         <div className="nav-label">Workspace</div>
         <nav className="nav-list">
