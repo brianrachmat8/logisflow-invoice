@@ -58,103 +58,136 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   const logoImage = await embedPdfImage(pdf, invoice.company.logoPath);
   const signatureImage = await embedPdfImage(pdf, invoice.company.signaturePath);
+  const pageWidth = 595.28;
+  const pageHeight = 841.89;
+  const teal = rgb(0.23, 0.48, 0.62);
+  const tealDark = rgb(0.05, 0.13, 0.28);
+  const cream = rgb(1, 0.93, 0.78);
+  const accent = rgb(0.95, 0.43, 0.29);
   const navy = rgb(0.04, 0.09, 0.22);
-  const blue = rgb(0.1, 0.4, 1);
-  const muted = rgb(0.42, 0.46, 0.55);
-  let y = 780;
-  const draw = (text: string, x: number, size = 9, font = regular, color = navy) => {
-    page.drawText(sanitize(text), { x, y, size, font, color });
-  };
-  const drawTextAt = (text: string, x: number, yy: number, size = 9, font = regular, color = navy) => {
-    page.drawText(sanitize(text), { x, y: yy, size, font, color });
-  };
-  const drawRight = (text: string, rightX: number, yy: number, size = 9, font = regular, color = navy) => {
+  const muted = rgb(0.32, 0.39, 0.48);
+  const white = rgb(1, 1, 1);
+  const drawRight = (text: string, rightX: number, y: number, size = 9, font = regular, color = navy) => {
     const safe = sanitize(text);
-    page.drawText(safe, { x: rightX - font.widthOfTextAtSize(safe, size), y: yy, size, font, color });
+    page.drawText(safe, { x: rightX - font.widthOfTextAtSize(safe, size), y, size, font, color });
   };
-  page.drawRectangle({ x: 0, y: 805, width: 595.28, height: 37, color: navy });
+  const drawCentered = (text: string, centerX: number, y: number, size: number, font = bold, color = white) => {
+    const safe = sanitize(text);
+    page.drawText(safe, { x: centerX - font.widthOfTextAtSize(safe, size) / 2, y, size, font, color });
+  };
+
+  page.drawRectangle({ x: 0, y: 0, width: pageWidth, height: pageHeight, color: cream });
+  page.drawRectangle({ x: 0, y: 592, width: pageWidth, height: 250, color: teal });
+  page.drawRectangle({ x: 0, y: 0, width: pageWidth, height: 34, color: teal });
+
+  [0, 48, 105].forEach((x, index) => {
+    page.drawRectangle({ x, y: 804, width: 32, height: 8, color: accent });
+    page.drawRectangle({ x: x + 48, y: 784, width: 40, height: 8, color: accent });
+    if (index !== 1) page.drawRectangle({ x: x + 8, y: 764, width: 40, height: 8, color: accent });
+  });
+  [250, 308].forEach((x) => {
+    page.drawRectangle({ x, y: 804, width: 40, height: 8, color: accent });
+    page.drawRectangle({ x: x + 16, y: 784, width: 40, height: 8, color: accent });
+    page.drawRectangle({ x: x + 58, y: 764, width: 40, height: 8, color: accent });
+  });
+
   if (logoImage) {
-    const logoSize = fitImage(logoImage.width, logoImage.height, 54, 40);
-    page.drawImage(logoImage, { x: 38, y: 758 + (42 - logoSize.height) / 2, width: logoSize.width, height: logoSize.height });
+    const logoSize = fitImage(logoImage.width, logoImage.height, 74, 48);
+    page.drawImage(logoImage, { x: 468, y: 770, width: logoSize.width, height: logoSize.height });
   } else {
-    page.drawRectangle({ x: 38, y: 758, width: 42, height: 42, color: blue });
+    page.drawCircle({ x: 508, y: 795, size: 24, color: white });
+    page.drawCircle({ x: 508, y: 795, size: 9, color: teal });
   }
-  draw(invoice.company.name, 94, 15, bold); y -= 18;
-  wrapText(invoice.company.address, 300, 8, regular).slice(0, 2).forEach((line, index) => {
-    drawTextAt(line, 94, 762 - index * 11, 8, regular, muted);
-  });
-  drawRight("INVOICE", 557, 775, 20, bold, navy);
-  y = 720;
-  draw("DITAGIHKAN KEPADA", 38, 8, bold, muted); y -= 19;
-  draw(invoice.client.name, 38, 12, bold); y -= 16;
-  wrapText(invoice.client.address, 300, 8, regular).slice(0, 3).forEach((line, index) => {
-    drawTextAt(line, 38, 694 - index * 12, 8, regular, muted);
-  });
-  page.drawText(`No: ${invoice.invoiceNumber}`, { x: 350, y: 720, size: 9, font: bold, color: navy });
-  page.drawText(`Tanggal: ${tanggal.format(invoice.invoiceDate)}`, { x: 350, y: 704, size: 8, font: regular, color: muted });
-  page.drawText(`Jatuh tempo: ${tanggal.format(invoice.dueDate)}`, { x: 350, y: 689, size: 8, font: regular, color: muted });
+  drawRight(invoice.company.name, 544, 748, 14, bold, white);
 
-  y = 640;
-  const meta = invoiceDocumentMeta(invoice);
-  page.drawRectangle({ x: 38, y: 556, width: 519, height: 101, color: rgb(.97, .98, 1) });
+  page.drawRectangle({ x: 207, y: 657, width: 181, height: 20, color: accent });
+  drawCentered("INVOICE", pageWidth / 2, 672, 38, bold, white);
+
+  page.drawText(`INVOICE NO. ${invoice.invoiceNumber}`, { x: 84, y: 622, size: 11, font: bold, color: white });
+  page.drawText(`DATE ${tanggal.format(invoice.invoiceDate)}`, { x: 84, y: 606, size: 11, font: bold, color: white });
+  page.drawText(`DUE ${tanggal.format(invoice.dueDate)}`, { x: 84, y: 590, size: 9, font: regular, color: white });
+
+  page.drawText(`INVOICE TO: ${sanitize(invoice.client.name).toUpperCase()}`, { x: 345, y: 622, size: 11, font: bold, color: white });
+  wrapText(invoice.client.address, 185, 8, regular).slice(0, 3).forEach((line, index) => {
+    page.drawText(line, { x: 345, y: 607 - index * 12, size: 8, font: regular, color: white });
+  });
+
+  const meta = invoiceDocumentMeta(invoice).slice(0, 4);
+  page.drawRectangle({ x: 0, y: 552, width: pageWidth, height: 40, color: cream });
   meta.forEach(([label, value], index) => {
-    const x = 52 + (index % 2) * 255;
-    const yy = 634 - Math.floor(index / 2) * 31;
-    page.drawText(label, { x, y: yy, size: 7, font: bold, color: muted });
-    page.drawText(sanitize(value).slice(0, 31), { x, y: yy - 13, size: 9, font: bold, color: navy });
+    const x = 56 + index * 130;
+    page.drawText(label, { x, y: 576, size: 6.5, font: bold, color: teal });
+    page.drawText(sanitize(value).slice(0, 22), { x, y: 563, size: 8, font: bold, color: navy });
   });
 
-  y = 520;
-  page.drawRectangle({ x: 38, y: y - 5, width: 519, height: 26, color: navy });
-  const cols = [48, 260, 345, 430, 545];
-  ["DESKRIPSI", "QTY", "HARGA", "TOTAL"].forEach((label, i) => {
-    page.drawText(label, { x: cols[i], y: y + 5, size: 7, font: bold, color: rgb(1,1,1) });
-  });
-  y -= 30;
-  for (const item of invoice.items.slice(0, 14)) {
-    page.drawText(sanitize(item.description).slice(0, 48), { x: 48, y, size: 8, font: regular, color: navy });
-    drawRight(String(item.quantity), 270, y, 8, regular, navy);
-    drawRight(formatNumber(item.unitPrice.toNumber()), 395, y, 8, regular, navy);
-    drawRight(formatNumber(item.totalAmount.toNumber()), 505, y, 8, bold, navy);
-    page.drawLine({ start: { x: 38, y: y - 8 }, end: { x: 557, y: y - 8 }, thickness: .4, color: rgb(.88,.9,.94) });
-    y -= 24;
-  }
-  y -= 12;
-  const totals = [
-    ["Subtotal", invoice.subtotal.toNumber()],
-    [`PPN ${invoice.taxRate}%`, invoice.taxAmount.toNumber()],
-    ["Grand Total", invoice.grandTotal.toNumber()],
-    ...(invoice.amountPaid.toNumber() > 0 ? [["DP / Paid", invoice.amountPaid.toNumber()]] as [string, number][] : []),
-    ...(invoice.outstandingAmount.toNumber() > 0 && invoice.amountPaid.toNumber() > 0 ? [["Sisa Tagihan", invoice.outstandingAmount.toNumber()]] as [string, number][] : []),
-  ];
-  totals.forEach(([label, amount], index) => {
-    page.drawText(String(label), { x: 365, y: y - index * 22, size: index === 2 ? 10 : 8, font: index === 2 ? bold : regular, color: navy });
-    drawRight(formatNumber(Number(amount)), 520, y - index * 22, index === 2 ? 10 : 8, bold, index === 2 ? blue : navy);
-  });
-  const words = paymentAwareWords(invoice);
-  page.drawText(words.label, { x: 38, y, size: 7, font: bold, color: muted });
-  wrapText(words.text, 300, 8, bold).slice(0, 2).forEach((line, index) => {
-    page.drawText(sanitize(line), { x: 38, y: y - 18 - index * 12, size: 8, font: bold, color: navy });
-  });
-  const accounts = paymentAccounts(invoice);
-  page.drawText("Rekening pembayaran:", { x: 38, y: 118, size: 8, font: bold, color: muted });
-  accounts.slice(0, 3).forEach((account, index) => {
-    page.drawText(`${sanitize(account.bankName)}${account.isPrimary ? " (Utama)" : ""}: ${sanitize(account.accountNumber)} a.n. ${sanitize(account.accountName)}`, {
-      x: 38, y: 104 - index * 12, size: 8, font: regular, color: muted,
+  page.drawRectangle({ x: 0, y: 514, width: pageWidth, height: 38, color: teal });
+  page.drawText("NO.", { x: 82, y: 529, size: 12, font: bold, color: white });
+  page.drawText("DESKRIPSI", { x: 135, y: 529, size: 12, font: bold, color: white });
+  page.drawText("HARGA", { x: 318, y: 529, size: 12, font: bold, color: white });
+  page.drawText("QTY", { x: 400, y: 529, size: 12, font: bold, color: white });
+  page.drawText("TOTAL", { x: 470, y: 529, size: 12, font: bold, color: white });
+
+  let y = 486;
+  invoice.items.slice(0, 8).forEach((item, index) => {
+    page.drawText(String(index + 1).padStart(2, "0"), { x: 86, y, size: 10, font: bold, color: navy });
+    wrapText(item.description, 170, 9, regular).slice(0, 2).forEach((line, lineIndex) => {
+      page.drawText(line, { x: 135, y: y - lineIndex * 11, size: 9, font: regular, color: navy });
     });
+    drawRight(formatNumber(item.unitPrice.toNumber()), 362, y, 9, regular, navy);
+    drawRight(String(item.quantity), 420, y, 9, regular, navy);
+    drawRight(formatNumber(item.totalAmount.toNumber()), 520, y, 9, bold, navy);
+    y -= 32;
+  });
+
+  const totalsY = Math.max(y - 4, 208);
+  drawRight(`SUB TOTAL: ${formatNumber(invoice.subtotal.toNumber())}`, 505, totalsY, 11, bold, teal);
+  drawRight(`PPN ${invoice.taxRate}%: ${formatNumber(invoice.taxAmount.toNumber())}`, 505, totalsY - 18, 9, bold, muted);
+  page.drawRectangle({ x: 390, y: totalsY - 43, width: 115, height: 18, color: accent });
+  drawRight(`TOTAL: ${formatNumber(invoice.grandTotal.toNumber())}`, 500, totalsY - 38, 11, bold, white);
+  let paidY = totalsY - 60;
+  if (invoice.amountPaid.toNumber() > 0) {
+    drawRight(`DP / PAID: ${formatNumber(invoice.amountPaid.toNumber())}`, 505, paidY, 9, bold, muted);
+    paidY -= 16;
+    drawRight(`SISA: ${formatNumber(invoice.outstandingAmount.toNumber())}`, 505, paidY, 9, bold, navy);
+  }
+
+  const words = paymentAwareWords(invoice);
+  page.drawText(words.label, { x: 46, y: 204, size: 8, font: bold, color: teal });
+  page.drawLine({ start: { x: 46, y: 199 }, end: { x: 232, y: 199 }, thickness: 1.2, color: teal });
+  wrapText(words.text, 210, 9, bold).slice(0, 2).forEach((line, index) => {
+    page.drawText(line, { x: 46, y: 185 - index * 12, size: 9, font: bold, color: navy });
+  });
+
+  const accounts = paymentAccounts(invoice);
+  page.drawText("Payment details:", { x: 46, y: 146, size: 12, font: regular, color: navy });
+  page.drawLine({ start: { x: 46, y: 140 }, end: { x: 230, y: 140 }, thickness: 1.4, color: teal });
+  page.drawText(`Invoice no: ${invoice.invoiceNumber}`, { x: 46, y: 126, size: 9, font: regular, color: navy });
+  accounts.slice(0, 2).forEach((account, index) => {
+    page.drawText(`${sanitize(account.bankName)}: ${sanitize(account.accountNumber)}`, { x: 46, y: 112 - index * 12, size: 9, font: regular, color: navy });
+    page.drawText(`a.n. ${sanitize(account.accountName)}`, { x: 46, y: 100 - index * 12, size: 9, font: regular, color: navy });
   });
   if (!accounts.length) {
-    page.drawText("Belum ada rekening pembayaran.", { x: 38, y: 104, size: 8, font: regular, color: muted });
+    page.drawText("Belum ada rekening pembayaran.", { x: 46, y: 112, size: 9, font: regular, color: navy });
   }
-  page.drawText(sanitize(invoice.company.closingGreeting || "Hormat kami"), { x: 405, y: 126, size: 8, font: regular, color: navy });
+
+  page.drawText(invoice.company.name, { x: 46, y: 72, size: 11, font: bold, color: navy });
+  page.drawLine({ start: { x: 46, y: 66 }, end: { x: 230, y: 66 }, thickness: 1.4, color: teal });
+  wrapText(invoice.company.address, 235, 8, regular).slice(0, 2).forEach((line, index) => {
+    page.drawText(line, { x: 46, y: 52 - index * 11, size: 8, font: regular, color: navy });
+  });
+
+  page.drawText(sanitize(invoice.company.closingGreeting || "Hormat kami"), { x: 410, y: 140, size: 9, font: regular, color: navy });
   if (signatureImage) {
-    const signatureSize = fitImage(signatureImage.width, signatureImage.height, 120, 48);
-    page.drawImage(signatureImage, { x: 395, y: 68, width: signatureSize.width, height: signatureSize.height });
+    const signatureSize = fitImage(signatureImage.width, signatureImage.height, 120, 55);
+    page.drawImage(signatureImage, { x: 395, y: 78, width: signatureSize.width, height: signatureSize.height });
   }
-  page.drawText(sanitize(invoice.company.signerName || invoice.company.name), { x: 385, y: 45, size: 8, font: bold, color: navy });
+  page.drawLine({ start: { x: 390, y: 74 }, end: { x: 505, y: 74 }, thickness: 1.2, color: navy });
+  drawCentered(invoice.company.signerName || invoice.company.name, 447, 58, 11, bold, navy);
   if (invoice.company.signerTitle) {
-    page.drawText(sanitize(invoice.company.signerTitle), { x: 385, y: 33, size: 7, font: regular, color: muted });
+    drawCentered(invoice.company.signerTitle, 447, 44, 9, regular, navy);
   }
+
+  drawCentered("Logisflow Smart Logistics Flow", pageWidth / 2, 13, 8, regular, white);
   const bytes = await pdf.save();
   await fs.writeFile(filePath, bytes);
 }
