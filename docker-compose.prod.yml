@@ -20,6 +20,8 @@ services:
     build: .
     restart: unless-stopped
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       db:
         condition: service_healthy
     environment:
@@ -38,7 +40,6 @@ services:
     build:
       context: .
       target: builder
-    profiles: ["tools"]
     depends_on:
       db:
         condition: service_healthy
@@ -53,7 +54,7 @@ services:
       TZ: ${TZ:-Asia/Jakarta}
     volumes:
       - invoice_files:/app/storage
-    command: ["sh", "-c", "pnpm prisma db push"]
+    command: ["sh", "-c", "pnpm db:deploy"]
 
   seed:
     build:
