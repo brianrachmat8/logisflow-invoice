@@ -3,7 +3,17 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export function ShipmentDeleteButton({ shipmentId, disabled }: { shipmentId: string; disabled?: boolean }) {
+export function ShipmentDeleteButton({
+  shipmentId,
+  disabled,
+  redirectTo,
+  lockedReason = "Shipment ini sudah punya invoice final/lunas/berjalan. Batalkan invoice dahulu jika data memang salah.",
+}: {
+  shipmentId: string;
+  disabled?: boolean;
+  redirectTo?: string;
+  lockedReason?: string;
+}) {
   const router = useRouter();
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -11,10 +21,10 @@ export function ShipmentDeleteButton({ shipmentId, disabled }: { shipmentId: str
   async function removeShipment() {
     setMessage("");
     if (disabled) {
-      setMessage("Tidak bisa hapus shipment yang sudah punya invoice final/berjalan.");
+      setMessage(lockedReason);
       return;
     }
-    if (!window.confirm("Hapus shipment ini? Draft invoice, B/L, kontainer, dan biaya di shipment ini ikut terhapus.")) return;
+    if (!window.confirm("Hapus data trial shipment ini? Draft invoice, B/L, kontainer, biaya, dan file draft di shipment ini ikut terhapus. Invoice final/lunas tidak bisa dihapus dari sini.")) return;
     setLoading(true);
     const response = await fetch(`/api/shipments/${shipmentId}`, { method: "DELETE" });
     const payload = await response.json();
@@ -23,15 +33,20 @@ export function ShipmentDeleteButton({ shipmentId, disabled }: { shipmentId: str
       setMessage(payload.error?.message || "Shipment gagal dihapus.");
       return;
     }
+    if (redirectTo) {
+      router.push(redirectTo);
+      router.refresh();
+      return;
+    }
     router.refresh();
   }
 
   return (
     <div className="inline-action">
-      <button className="btn btn-danger" type="button" onClick={removeShipment} disabled={loading}>
-        {loading ? "Menghapus..." : "Delete"}
+      <button className="btn btn-danger" type="button" onClick={removeShipment} disabled={loading} title={disabled ? lockedReason : "Hapus data trial shipment"}>
+        {loading ? "Menghapus..." : "Hapus trial"}
       </button>
-      {message && <small style={{ color: "var(--danger)", display: "block", marginTop: 6 }}>{message}</small>}
+      {message && <small style={{ color: "var(--danger)", display: "block", marginTop: 6, maxWidth: 240 }}>{message}</small>}
     </div>
   );
 }
