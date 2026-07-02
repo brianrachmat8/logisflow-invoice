@@ -27,11 +27,14 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
   if (!invoice) notFound();
 
   const paidAmount = numberValue(invoice.amountPaid);
-  const outstandingAmount = numberValue(invoice.outstandingAmount);
-  const wordsAmount = paidAmount > 0 ? outstandingAmount : numberValue(invoice.grandTotal);
-  const wordsLabel = paidAmount > 0 ? "TERBILANG SISA TAGIHAN" : "TERBILANG";
-  const paymentLabel = invoice.status === "PAID"
-    ? "PAID / Lunas"
+  const grandTotal = numberValue(invoice.grandTotal);
+  const outstandingAmount = Math.max(grandTotal - paidAmount, 0);
+  const wordsAmount = paidAmount > 0 ? outstandingAmount : grandTotal;
+  const wordsLabel = "TERBILANG";
+  const isPaid = paidAmount > 0 && outstandingAmount <= 0;
+  const isOtherOrder = invoice.shipment.shipmentDirection === "LAIN_LAIN";
+  const paymentLabel = isPaid
+    ? "LUNAS"
     : paidAmount > 0
       ? `DP / Terbayar sebagian ${rupiah.format(paidAmount)}`
       : "Belum ada pembayaran";
@@ -60,7 +63,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
           <ArrowLeft size={16} /> Kembali ke shipment
         </Link>
         <div>
-          <StatusBadge status={invoice.status} />
+          <StatusBadge status={isPaid ? "PAID" : invoice.status} />
           <h2 style={{ marginTop: 10 }}>{invoice.invoiceNumber || invoice.draftNumber}</h2>
           <p>{invoice.type} · {invoice.client.name}</p>
         </div>
@@ -99,10 +102,11 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
           <span style={{ fontSize: 12, color: "var(--muted)" }}>{invoice.client.address}</span>
         </div>
         <div className="summary-stack">
-          <div className="summary-line"><span>{invoice.shipment.shipmentDirection === "EXPORT" ? "DO Number (Export)" : "B/L Number (Import)"}</span><strong>{invoice.shipment.doNumber}</strong></div>
-          <div className="summary-line"><span>Vessel/Voyage</span><strong>{invoice.shipment.vessel} / {invoice.shipment.voyage}</strong></div>
-          <div className="summary-line"><span>B/L Number</span><strong>{invoice.bill?.number || "Gabungan"}</strong></div>
-          <div className="summary-line"><span>Size 20/40</span><strong>{summarizeContainerSizes(invoice.shipment.containers)}</strong></div>
+          <div className="summary-line"><span>{invoice.shipment.shipmentDirection === "EXPORT" ? "DO Number (Export)" : invoice.shipment.shipmentDirection === "IMPORT" ? "B/L Number (Import)" : "Referensi"}</span><strong>{invoice.shipment.doNumber}</strong></div>
+          <div className="summary-line"><span>{isOtherOrder ? "Pekerjaan / Kode" : "Vessel/Voyage"}</span><strong>{invoice.shipment.vessel} / {invoice.shipment.voyage}</strong></div>
+          <div className="summary-line"><span>{isOtherOrder ? "Tagihan" : "B/L Number"}</span><strong>{invoice.bill?.number || (isOtherOrder ? "Gabungan" : "Gabungan")}</strong></div>
+          {!isOtherOrder && <div className="summary-line"><span>Size 20/40</span><strong>{summarizeContainerSizes(invoice.shipment.containers)}</strong></div>}
+          {!isOtherOrder && <div className="summary-line"><span>No kontainer</span><strong>{summarizeContainerNumbers(invoice.shipment.containers)}</strong></div>}
         </div>
       </div>
 
@@ -123,10 +127,10 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
       <div style={{ width: 360, margin: "24px 0 0 auto" }} className="summary-stack">
         <div className="summary-line"><span>Subtotal</span><strong>{rupiah.format(numberValue(invoice.subtotal))}</strong></div>
         <div className="summary-line"><span>PPN {numberValue(invoice.taxRate)}%</span><strong>{rupiah.format(numberValue(invoice.taxAmount))}</strong></div>
-        <div className="summary-line total"><span>Grand total</span><strong style={{ color: "var(--blue)" }}>{rupiah.format(numberValue(invoice.grandTotal))}</strong></div>
+        <div className="summary-line total"><span>Grand total</span><strong style={{ color: "var(--blue)" }}>{rupiah.format(grandTotal)}</strong></div>
         <div className="summary-line"><span>Status pembayaran</span><strong>{paymentLabel}</strong></div>
         {paidAmount > 0 && <div className="summary-line"><span>Paid</span><strong>{rupiah.format(paidAmount)}</strong></div>}
-        {outstandingAmount > 0 && <div className="summary-line"><span>Sisa tagihan</span><strong>{rupiah.format(outstandingAmount)}</strong></div>}
+        <div className="summary-line"><span>Sisa tagihan</span><strong>{rupiah.format(outstandingAmount)}</strong></div>
       </div>
 
       <div style={{ marginTop: 28, borderTop: "1px solid var(--line)", paddingTop: 18 }}>
@@ -176,4 +180,9 @@ function summarizeContainerSizes(containers: { size: string }[]) {
     return acc;
   }, {});
   return Object.entries(groups).map(([size, count]) => `${size}: ${count}`).join(" · ");
+}
+
+function summarizeContainerNumbers(containers: { number: string }[]) {
+  if (!containers.length) return "-";
+  return containers.map((container) => container.number).join(", ");
 }
