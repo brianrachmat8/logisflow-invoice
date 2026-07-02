@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LoaderCircle } from "lucide-react";
 
@@ -82,6 +83,11 @@ export function GenerateInvoicePanel({
     router.refresh();
   }
 
+  function closePreview() {
+    setPreview(null);
+    setMessage("");
+  }
+
   return (
     <div className="generate-panel">
       {!isOtherOrder && <div className="field">
@@ -103,8 +109,16 @@ export function GenerateInvoicePanel({
       {message && <small style={{ color: message.includes("berhasil") ? "var(--success)" : "var(--danger)" }}>{message}</small>}
       {preview && <div className="card" style={{ background: "rgba(255,255,255,.08)", borderColor: "rgba(255,255,255,.16)" }}>
         <div className="card-body" style={{ display: "grid", gap: 12 }}>
-          <strong>Preview simulasi invoice</strong>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+            <strong>Preview simulasi invoice</strong>
+            <button className="btn btn-secondary" type="button" onClick={closePreview} style={{ padding: "8px 12px" }}>
+              Tutup preview
+            </button>
+          </div>
           <small style={{ color: "rgba(255,255,255,.72)" }}>Ini hanya hitungan sementara. Nomor invoice belum dibuat dan database belum berubah.</small>
+          <Link className="btn btn-secondary" href={`/shipments/${shipmentId}/invoice-preview?mode=${effectiveMode}`} target="_blank" style={{ width: "fit-content" }}>
+            Buka preview visual
+          </Link>
           <div style={{ display: "grid", gap: 10 }}>
             {preview.invoices.map((invoice) => <div key={invoice.key} style={{ borderTop: "1px solid rgba(255,255,255,.16)", paddingTop: 10 }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
