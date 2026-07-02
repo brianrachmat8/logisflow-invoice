@@ -28,7 +28,11 @@ export default async function ShipmentDetailPage({ params }: { params: Promise<{
   const isOtherOrder = shipment.shipmentDirection === "LAIN_LAIN";
   const totalJasa = shipment.charges.filter((charge) => charge.category === "JASA").reduce((sum, charge) => sum + numberValue(charge.totalAmount), 0);
   const totalReimb = shipment.charges.filter((charge) => charge.category === "REIMBURSEMENT").reduce((sum, charge) => sum + numberValue(charge.totalAmount), 0);
+  const totalCharges = totalJasa + totalReimb;
   const advanceDpAmount = numberValue(shipment.advanceDpAmount);
+  const appliedAdvanceDp = Math.min(advanceDpAmount, totalCharges);
+  const excessAdvanceDp = Math.max(advanceDpAmount - totalCharges, 0);
+  const estimatedOutstanding = Math.max(totalCharges - appliedAdvanceDp, 0);
   const activeInvoices = shipment.invoices.filter((invoice) => invoice.status !== "CANCELLED" && invoice.status !== "REVISED");
   const hasDraft = activeInvoices.some((invoice) => invoice.status === "DRAFT");
   const hasLockedInvoice = activeInvoices.some((invoice) => invoice.status !== "DRAFT");
@@ -95,10 +99,15 @@ export default async function ShipmentDetailPage({ params }: { params: Promise<{
         <div className="card-body summary-stack">
           <div className="summary-line"><span>Biaya JASA</span><strong>{rupiah.format(totalJasa)}</strong></div>
           <div className="summary-line"><span>Reimbursement</span><strong>{rupiah.format(totalReimb)}</strong></div>
-          <div className="summary-line total"><span>Total keseluruhan</span><strong>{rupiah.format(totalJasa + totalReimb)}</strong></div>
+          <div className="summary-line total"><span>Total keseluruhan</span><strong>{rupiah.format(totalCharges)}</strong></div>
           {advanceDpAmount > 0 && <>
-            <div className="summary-line"><span>DP awal</span><strong>{rupiah.format(advanceDpAmount)}</strong></div>
-            <div className="summary-line"><span>Estimasi sisa tagihan</span><strong>{rupiah.format(Math.max(totalJasa + totalReimb - advanceDpAmount, 0))}</strong></div>
+            <div className="summary-line"><span>DP awal tersimpan</span><strong>{rupiah.format(advanceDpAmount)}</strong></div>
+            <div className="summary-line"><span>DP diterapkan</span><strong>{rupiah.format(appliedAdvanceDp)}</strong></div>
+            {excessAdvanceDp > 0 && <>
+              <div className="summary-line"><span>DP belum terpakai</span><strong>{rupiah.format(excessAdvanceDp)}</strong></div>
+              <small style={{ color: "var(--danger)", lineHeight: 1.5 }}>DP awal lebih besar dari total biaya saat ini. Jika ini karena biaya sempat dihapus, edit DP awal di panel atas agar tidak ikut terbawa saat invoice dibuat.</small>
+            </>}
+            <div className="summary-line"><span>Estimasi sisa tagihan</span><strong>{rupiah.format(estimatedOutstanding)}</strong></div>
           </>}
         </div>
       </div>
