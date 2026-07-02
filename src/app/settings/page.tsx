@@ -15,6 +15,10 @@ const MAX_COMPANIES = 3;
 
 type SettingsSearchParams = { companyId?: string };
 
+function companyStampKey(companyId: string) {
+  return `company:${companyId}:stampPath`;
+}
+
 async function saveUpload(file: FormDataEntryValue | null, prefix: string, allowed: string[]) {
   if (!(file instanceof File) || !file.size) return null;
   if (!allowed.includes(file.type)) throw new Error(`Format ${prefix} tidak didukung.`);
@@ -33,12 +37,13 @@ async function redirectToCompany(companyId: string) {
 
 export default async function SettingsPage({ searchParams }: { searchParams?: Promise<SettingsSearchParams> }) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
-  const [companies, taxes] = await Promise.all([
+  const [companies, taxes, stampSettings] = await Promise.all([
     db.company.findMany({
       orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
       include: { bankAccounts: { orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }] } },
     }),
     db.taxRate.findMany({ orderBy: { effectiveDate: "desc" } }),
+    db.appSetting.findMany({ where: { key: { contains: ":stampPath" } } }),
   ]);
   const isCreatingNew = resolvedSearchParams.companyId === "new" || companies.length === 0;
   const selectedCompany = isCreatingNew
@@ -46,6 +51,9 @@ export default async function SettingsPage({ searchParams }: { searchParams?: Pr
     : companies.find((item) => item.id === resolvedSearchParams.companyId) ?? companies[0] ?? null;
   const canAddCompany = companies.length < MAX_COMPANIES;
   const selectedCompanyId = selectedCompany?.id ?? "";
+  const selectedCompanyHasStamp = selectedCompany
+    ? stampSettings.some((setting) => setting.key === companyStampKey(selectedCompany.id) && setting.value)
+    : false;
 
   async function saveCompany(form: FormData) {
     "use server";
@@ -84,9 +92,10 @@ export default async function SettingsPage({ searchParams }: { searchParams?: Pr
       return result;
     });
 
-    const [logoPath, signaturePath] = await Promise.all([
+    const [logoPath, signaturePath, stampPath] = await Promise.all([
       saveUpload(form.get("logo"), `logo-${savedCompany.id}`, ["image/png", "image/jpeg"]),
       saveUpload(form.get("signature"), `signature-${savedCompany.id}`, ["image/png"]),
+      saveUpload(form.get("stamp"), `stamp-${savedCompany.id}`, ["image/png"]),
     ]);
     if (logoPath || signaturePath) {
       await db.company.update({
@@ -95,6 +104,13 @@ export default async function SettingsPage({ searchParams }: { searchParams?: Pr
           ...(logoPath ? { logoPath } : {}),
           ...(signaturePath ? { signaturePath } : {}),
         },
+      });
+    }
+    if (stampPath) {
+      await db.appSetting.upsert({
+        where: { key: companyStampKey(savedCompany.id) },
+        update: { value: stampPath },
+        create: { key: companyStampKey(savedCompany.id), value: stampPath },
       });
     }
     await redirectToCompany(savedCompany.id);
@@ -237,6 +253,12 @@ export default async function SettingsPage({ searchParams }: { searchParams?: Pr
               <label>Upload TTD</label>
               <input name="signature" type="file" accept=".png" />
               <small>Format PNG transparan agar rapi di salam penutup invoice.</small>
+            </div>
+            <div className="field">
+              <label>Upload stampel</label>
+              <input name="stamp" type="file" accept=".png" />
+              <small>Format PNG transparan. Stampel akan berada di belakang TTD pada PDF invoice.</small>
+              {selectedCompanyHasStamp && <small style={{ color: "var(--success)" }}>Stampel sudah tersimpan.</small>}
             </div>
           </div>
           <div className="field"><label>Nama perusahaan</label><input name="name" required defaultValue={selectedCompany?.name}/></div>
