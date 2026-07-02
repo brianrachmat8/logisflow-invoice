@@ -9,12 +9,20 @@ import { tanggal } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
+const deletableInvoiceStatuses = ["DRAFT", "CANCELLED", "REVISED"];
+
 export default async function ShipmentsPage() {
   const shipments = await db.shipment.findMany({
     include: {
       client: true,
       carrier: true,
-      invoices: { select: { status: true } },
+      invoices: {
+        select: {
+          status: true,
+          invoiceNumber: true,
+          _count: { select: { payments: true } },
+        },
+      },
       _count: { select: { bills: true, containers: true } },
     },
     orderBy: { createdAt: "desc" },
@@ -27,7 +35,7 @@ export default async function ShipmentsPage() {
       <div className="filters"><input className="filter-input search" placeholder="Cari job, DO, referensi, atau klien..." /><select className="filter-input"><option>Semua status</option></select></div>
       <div className="table-wrap"><table><thead><tr><th>Job order</th><th>Klien</th><th>Vessel / Pekerjaan</th><th>B/L</th><th>Kontainer</th><th>Tanggal</th><th>Status</th><th>Aksi</th></tr></thead>
         <tbody>{shipments.map((item) => {
-          const hasLockedInvoice = item.invoices.some((invoice) => !["DRAFT", "CANCELLED", "REVISED"].includes(invoice.status));
+          const hasLockedInvoice = item.invoices.some((invoice) => Boolean(invoice.invoiceNumber) || invoice._count.payments > 0 || !deletableInvoiceStatuses.includes(invoice.status));
           const isOtherOrder = item.shipmentDirection === "LAIN_LAIN";
           return <tr key={item.id}>
             <td className="primary-cell"><Link href={`/shipments/${item.id}`}><strong>{item.jobNumber}</strong><span>{orderLabel(item.shipmentDirection)} {item.doNumber}</span></Link></td>

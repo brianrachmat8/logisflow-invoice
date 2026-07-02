@@ -2,6 +2,8 @@ import { db } from "@/lib/db";
 import { fail, ok, requireUser } from "@/lib/api";
 import { audit } from "@/lib/audit";
 
+const deletableInvoiceStatuses = ["DRAFT", "CANCELLED", "REVISED"];
+
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireUser();
   if (access.error) return access.error;
@@ -28,14 +30,29 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
     const { id } = await params;
     const shipment = await db.shipment.findUnique({
       where: { id },
-      include: { invoices: { select: { id: true, status: true, invoiceNumber: true, draftNumber: true } } },
+      include: {
+        invoices: {
+          select: {
+            id: true,
+            status: true,
+            invoiceNumber: true,
+            draftNumber: true,
+            _count: { select: { payments: true } },
+          },
+        },
+      },
     });
     if (!shipment) return fail("Shipment tidak ditemukan.", 404);
 
-    const lockedInvoice = shipment.invoices.find((invoice) => !["DRAFT", "CANCELLED", "REVISED"].includes(invoice.status));
+    const lockedInvoice = shipment.invoices.find((invoice) => {
+      const hasOfficialNumber = Boolean(invoice.invoiceNumber);
+      const hasPayment = invoice._count.payments > 0;
+      const hasLockedStatus = !deletableInvoiceStatuses.includes(invoice.status);
+      return hasOfficialNumber || hasPayment || hasLockedStatus;
+    });
     if (lockedInvoice) {
       return fail(
-        `Shipment tidak bisa dihapus karena sudah memiliki invoice final/berjalan (${lockedInvoice.invoiceNumber || lockedInvoice.draftNumber}).`,
+        `Shipment tidak bisa dihapus karena sudah memiliki invoice resmi/berbayar (${lockedInvoice.invoiceNumber || lockedInvoice.draftNumber}). Gunakan Batalkan invoice jika data perlu dikoreksi.`,
         422,
       );
     }
@@ -51,7 +68,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
       await audit({
         userId: access.user.id,
         module: "SHIPMENT",
-        action: "DELETE",
+        action: "DELETE_TRIAL",
         referenceId: id,
         oldValue: { jobNumber: shipment.jobNumber, draftInvoiceCount: invoiceIds.length },
       }, tx);

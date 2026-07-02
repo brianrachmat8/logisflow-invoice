@@ -11,6 +11,8 @@ import { numberValue, rupiah, tanggal } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
+const deletableInvoiceStatuses = ["DRAFT", "CANCELLED", "REVISED"];
+
 export default async function ShipmentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const shipment = await db.shipment.findUnique({
@@ -21,7 +23,7 @@ export default async function ShipmentDetailPage({ params }: { params: Promise<{
       fieldTeam: true,
       bills: { include: { containers: true }, orderBy: { number: "asc" } },
       charges: { include: { bill: true }, orderBy: { createdAt: "asc" } },
-      invoices: { include: { bill: true }, orderBy: { createdAt: "asc" } },
+      invoices: { include: { bill: true, _count: { select: { payments: true } } }, orderBy: { createdAt: "asc" } },
     },
   });
   if (!shipment) notFound();
@@ -37,6 +39,7 @@ export default async function ShipmentDetailPage({ params }: { params: Promise<{
   const activeInvoices = shipment.invoices.filter((invoice) => invoice.status !== "CANCELLED" && invoice.status !== "REVISED");
   const hasDraft = activeInvoices.some((invoice) => invoice.status === "DRAFT");
   const hasLockedInvoice = activeInvoices.some((invoice) => invoice.status !== "DRAFT");
+  const hasOfficialInvoice = shipment.invoices.some((invoice) => Boolean(invoice.invoiceNumber) || invoice._count.payments > 0 || !deletableInvoiceStatuses.includes(invoice.status));
   const bills = shipment.bills.map(({ id: billId, number }) => ({ id: billId, number }));
 
   return <AppShell title="Detail shipment">
@@ -68,10 +71,10 @@ export default async function ShipmentDetailPage({ params }: { params: Promise<{
         <div>
           <h3 style={{ margin: "0 0 6px" }}>Bersihkan data trial</h3>
           <p style={{ margin: 0, color: "var(--muted)", maxWidth: 680 }}>
-            Gunakan untuk menghapus shipment yang hanya percobaan atau salah input. Data dengan invoice final/lunas tidak bisa dihapus dari sini agar arsip tetap aman.
+            Gunakan untuk menghapus shipment yang hanya percobaan atau salah input. Data dengan invoice resmi/lunas tidak bisa dihapus dari sini agar arsip tetap aman.
           </p>
         </div>
-        <ShipmentDeleteButton shipmentId={id} disabled={hasLockedInvoice} redirectTo="/shipments" />
+        <ShipmentDeleteButton shipmentId={id} disabled={hasOfficialInvoice} redirectTo="/shipments" />
       </div>
     </div>
 
