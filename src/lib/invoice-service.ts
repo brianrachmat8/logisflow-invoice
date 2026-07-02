@@ -238,6 +238,47 @@ async function nextInvoiceNumber(tx: Prisma.TransactionClient, prefix: string, d
   return invoiceNumber(prefix, date, latestSequence + 1);
 }
 
+export async function cancelInvoice(invoiceId: string, userId: string) {
+  return db.$transaction(async (tx) => {
+    const invoice = await tx.invoice.findUnique({
+      where: { id: invoiceId },
+      include: { shipment: { select: { id: true } }, payments: true },
+    });
+    if (!invoice) throw new Error("Invoice tidak ditemukan.");
+    if (invoice.status === "CANCELLED") throw new Error("Invoice sudah dibatalkan.");
+    if (invoice.status === "REVISED") throw new Error("Invoice revisi lama tidak dapat dibatalkan lagi.");
+
+    const previousStatus = invoice.status;
+    const cancelled = await tx.invoice.update({
+      where: { id: invoiceId },
+      data: { status: "CANCELLED" },
+    });
+
+    const activeInvoices = await tx.invoice.count({
+      where: {
+        shipmentId: invoice.shipment.id,
+        status: { notIn: ["CANCELLED", "REVISED"] },
+      },
+    });
+    if (activeInvoices === 0) {
+      await tx.shipment.update({ where: { id: invoice.shipment.id }, data: { status: "READY_TO_GENERATE" } });
+    }
+
+    await audit(
+      {
+        userId,
+        module: "INVOICE",
+        action: "CANCEL",
+        referenceId: invoiceId,
+        oldValue: { status: previousStatus, amountPaid: invoice.amountPaid.toString(), payments: invoice.payments.length },
+        newValue: { status: "CANCELLED" },
+      },
+      tx,
+    );
+    return cancelled;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
 export async function recordPayment(
   invoiceId: string,
   userId: string,
