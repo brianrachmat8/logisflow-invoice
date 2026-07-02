@@ -9,6 +9,12 @@ export const tanggal = new Intl.DateTimeFormat("id-ID", {
   timeZone: "Asia/Jakarta",
 });
 
+export const tanggalWaktu = new Intl.DateTimeFormat("id-ID", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: "Asia/Jakarta",
+});
+
 export function numberValue(value: unknown) {
   if (typeof value === "number") return value;
   if (typeof value === "string") return Number(value);
