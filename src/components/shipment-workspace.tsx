@@ -51,6 +51,34 @@ export function ShipmentWorkspace({
   const [dpMode, setDpMode] = useState<"NO_DP" | "WITH_DP">("NO_DP");
   const [unitPrice, setUnitPrice] = useState("");
   const [advanceDpAmount, setAdvanceDpAmount] = useState("");
+  const [dpEditAmount, setDpEditAmount] = useState(formatMoneyInput(advanceDp?.amount || ""));
+  const [dpEditDate, setDpEditDate] = useState(advanceDp?.paymentDate || "");
+  const [dpEditMethod, setDpEditMethod] = useState(advanceDp?.method || "Transfer Bank");
+  const [dpEditReference, setDpEditReference] = useState(advanceDp?.reference || "");
+  const [dpEditNotes, setDpEditNotes] = useState(advanceDp?.notes || "");
+  const [dpSaving, setDpSaving] = useState(false);
+
+  async function updateAdvanceDp() {
+    setMessage("");
+    setDpSaving(true);
+    try {
+      const amount = parseMoneyInput(dpEditAmount);
+      await post(`/api/shipments/${shipmentId}/advance-dp`, {
+        amount,
+        paymentDate: dpEditDate,
+        method: dpEditMethod,
+        reference: dpEditReference,
+        notes: dpEditNotes,
+      });
+      setMessage("DP tersimpan berhasil diubah.");
+      router.refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "DP gagal diubah.");
+    } finally {
+      setDpSaving(false);
+    }
+  }
+
   async function handle(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
@@ -141,6 +169,28 @@ export function ShipmentWorkspace({
                   <span>Total DP/pembayaran tersimpan</span>
                   <strong>Rp {advanceDp.amount.toLocaleString("id-ID")}</strong>
                 </div> : null}
+                <div className="card" style={{ background: "white" }}>
+                  <div className="card-body form-stack">
+                    <strong>Koreksi DP tersimpan</strong>
+                    <small style={{ color: "var(--muted)" }}>Gunakan ini jika DP lama salah karena biaya trial/hapus. Isi 0 untuk menghapus DP tersimpan.</small>
+                    <div className="grid-equal">
+                      <div className="field">
+                        <label>Nominal DP tersimpan</label>
+                        <input
+                          inputMode="numeric"
+                          value={dpEditAmount}
+                          onChange={(event) => setDpEditAmount(formatMoneyInput(event.target.value))}
+                          placeholder="0"
+                        />
+                      </div>
+                      <div className="field"><label>Tanggal DP</label><input type="date" value={dpEditDate} onChange={(event) => setDpEditDate(event.target.value)} /></div>
+                      <div className="field"><label>Metode DP</label><select value={dpEditMethod} onChange={(event) => setDpEditMethod(event.target.value)}><option>Transfer Bank</option><option>Cash</option><option>Lainnya</option></select></div>
+                      <div className="field"><label>Referensi DP</label><input value={dpEditReference} onChange={(event) => setDpEditReference(event.target.value)} placeholder="No referensi bank" /></div>
+                    </div>
+                    <div className="field"><label>Catatan DP</label><input value={dpEditNotes} onChange={(event) => setDpEditNotes(event.target.value)} placeholder="Opsional" /></div>
+                    <button className="btn btn-secondary" type="button" onClick={updateAdvanceDp} disabled={dpSaving}>{dpSaving ? "Menyimpan..." : "Update DP tersimpan"}</button>
+                  </div>
+                </div>
                 <div className="field">
                   <label>Pembayaran awal</label>
                   <select name="dpMode" value={dpMode} onChange={(event) => setDpMode(event.target.value as "NO_DP" | "WITH_DP")}>

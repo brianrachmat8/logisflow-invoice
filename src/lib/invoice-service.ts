@@ -102,7 +102,8 @@ export async function generateDraftInvoices(
 
     const invoices = [];
     for (const [index, group] of groups.entries()) {
-      const draftNumber = `DRAFT/${now.getFullYear()}/${shipment.jobNumber}/${String(index + 1).padStart(2, "0")}`;
+      const baseDraftNumber = `DRAFT/${now.getFullYear()}/${shipment.jobNumber}/${String(index + 1).padStart(2, "0")}`;
+      const draftNumber = await nextDraftNumber(tx, baseDraftNumber);
       const paidFromAdvanceDp = advanceDpAllocations[index] ?? 0;
       const outstandingAmount = roundMoney(group.grandTotal - paidFromAdvanceDp);
       const invoice = await tx.invoice.create({
@@ -236,6 +237,20 @@ async function nextInvoiceNumber(tx: Prisma.TransactionClient, prefix: string, d
   });
   const latestSequence = latest?.invoiceNumber ? Number(latest.invoiceNumber.split("/").at(-1)) || 0 : 0;
   return invoiceNumber(prefix, date, latestSequence + 1);
+}
+
+async function nextDraftNumber(tx: Prisma.TransactionClient, baseDraftNumber: string) {
+  const existing = await tx.invoice.findMany({
+    where: { draftNumber: { startsWith: baseDraftNumber } },
+    select: { draftNumber: true },
+  });
+  if (!existing.some((invoice) => invoice.draftNumber === baseDraftNumber)) return baseDraftNumber;
+
+  const latestRevision = existing.reduce((max, invoice) => {
+    const match = invoice.draftNumber?.match(/-R(\d+)$/);
+    return Math.max(max, match ? Number(match[1]) || 1 : 1);
+  }, 1);
+  return `${baseDraftNumber}-R${latestRevision + 1}`;
 }
 
 export async function cancelInvoice(invoiceId: string, userId: string) {
