@@ -20,11 +20,15 @@ Seed memasang tarif PPN 11% hanya untuk data demonstrasi. Pada instalasi product
 
 ## Docker VPS
 
-1. Buat `.env` dan isi `AUTH_SECRET` serta `POSTGRES_PASSWORD`.
-2. Jalankan `docker compose up -d --build`.
+Panduan umum tersedia di `DEPLOYMENT.md`. Untuk deployment di Biznet VPS, gunakan `DEPLOYMENT_BIZNET_VPS.md`.
+
+Ringkasnya:
+
+1. Buat `.env` dan isi `AUTH_SECRET`, `POSTGRES_PASSWORD`, domain, serta email SSL.
+2. Jalankan `docker compose -f docker-compose.prod.yml up -d --build`.
 3. Terapkan schema dan seed dari container build/administrasi sebelum penggunaan pertama.
-4. Pasang HTTPS di reverse proxy atau load balancer VPS.
-5. Jadwalkan `deploy/backup.ps1` setiap hari. Backup lama dibersihkan setelah 30 hari.
+4. Pastikan DNS domain mengarah ke IP VPS dan port 80/443 terbuka.
+5. Jadwalkan `deploy/backup.sh` setiap hari. Backup lama dibersihkan setelah 30 hari.
 
 ## Modul
 
