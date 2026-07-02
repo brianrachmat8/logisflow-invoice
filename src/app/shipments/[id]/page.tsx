@@ -3,6 +3,7 @@ import { Box, FileText, Ship, WalletCards } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { ChargeManager } from "@/components/charge-manager";
 import { GenerateInvoicePanel } from "@/components/generate-invoice-panel";
+import { ShipmentDeleteButton } from "@/components/shipment-delete-button";
 import { ShipmentWorkspace } from "@/components/shipment-workspace";
 import { StatusBadge } from "@/components/status-badge";
 import { db } from "@/lib/db";
@@ -61,6 +62,18 @@ export default async function ShipmentDetailPage({ params }: { params: Promise<{
       <MiniMetric label="Total JASA" value={rupiah.format(totalJasa)} icon={<Ship />} />
       <MiniMetric label="Reimbursement" value={rupiah.format(totalReimb)} icon={<WalletCards />} />
     </section>
+
+    <div className="card" style={{ marginBottom: 20 }}>
+      <div className="card-body" style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+        <div>
+          <h3 style={{ margin: "0 0 6px" }}>Bersihkan data trial</h3>
+          <p style={{ margin: 0, color: "var(--muted)", maxWidth: 680 }}>
+            Gunakan untuk menghapus shipment yang hanya percobaan atau salah input. Data dengan invoice final/lunas tidak bisa dihapus dari sini agar arsip tetap aman.
+          </p>
+        </div>
+        <ShipmentDeleteButton shipmentId={id} disabled={hasLockedInvoice} redirectTo="/shipments" />
+      </div>
+    </div>
 
     <ShipmentWorkspace
       shipmentId={id}
