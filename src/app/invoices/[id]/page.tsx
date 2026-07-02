@@ -153,7 +153,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
       </div>
     </div>
 
-    {invoice.status !== "DRAFT" && invoice.status !== "PAID" && <div className="grid-equal" style={{ marginTop: 20 }}>
+    {invoice.status !== "DRAFT" && !isPaid && <div className="grid-equal" style={{ marginTop: 20 }}>
       <div className="card">
         <div className="card-head"><h3>Catat DP / pembayaran</h3></div>
         <div className="card-body"><PaymentForm invoiceId={id} max={outstandingAmount} /></div>
