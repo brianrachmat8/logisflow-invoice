@@ -181,7 +181,7 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
     drawText("Belum ada rekening pembayaran.", marginX, payY - 24, 10, regular, navy);
   }
 
-  const signY = Math.max(payY - 78, 58);
+  const signY = Math.max(payY - 60, 126);
   drawText(sanitize(invoice.company.closingGreeting || "Hormat kami"), 420, signY, 11, bold, navy);
   if (stampImage) {
     const stampSize = fitImage(stampImage.width, stampImage.height, 128, 76);
