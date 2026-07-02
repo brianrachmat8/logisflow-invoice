@@ -33,8 +33,9 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
   const wordsAmount = paidAmount > 0 ? outstandingAmount : grandTotal;
   const wordsLabel = "TERBILANG";
   const isPaid = paidAmount > 0 && outstandingAmount <= 0;
+  const visibleStatus = invoice.status === "CANCELLED" ? "CANCELLED" : isPaid ? "PAID" : invoice.status;
   const isOtherOrder = invoice.shipment.shipmentDirection === "LAIN_LAIN";
-  const showPaymentArea = invoice.status !== "DRAFT";
+  const showPaymentArea = invoice.status !== "DRAFT" && invoice.status !== "CANCELLED";
   const paymentLabel = isPaid
     ? "LUNAS"
     : paidAmount > 0
@@ -65,13 +66,14 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
           <ArrowLeft size={16} /> Kembali ke shipment
         </Link>
         <div>
-          <StatusBadge status={isPaid ? "PAID" : invoice.status} />
+          <StatusBadge status={visibleStatus} />
           <h2 style={{ marginTop: 10 }}>{invoice.invoiceNumber || invoice.draftNumber}</h2>
           <p>{invoice.type} · {invoice.client.name}</p>
         </div>
       </div>
       <div className="actions">
         {invoice.status === "DRAFT" && <ActionButton endpoint={`/api/invoices/${id}/finalize`} label="Finalkan invoice" confirm="Invoice final tidak dapat diedit langsung. Lanjutkan?" />}
+        {invoice.status !== "CANCELLED" && <ActionButton endpoint={`/api/invoices/${id}/cancel`} label="Batalkan invoice" className="btn btn-danger" confirm="Invoice akan ditandai BATAL. Nomor dan histori pembayaran tetap disimpan. Lanjutkan?" />}
         <a className="btn btn-secondary" href={`/api/invoices/${id}/export/pdf`}><Download size={16}/> PDF</a>
         <a className="btn btn-secondary" href={`/api/invoices/${id}/export/xlsx`}><Download size={16}/> Excel</a>
       </div>
@@ -128,7 +130,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
         <div className="summary-line"><span>Subtotal</span><strong>{rupiah.format(numberValue(invoice.subtotal))}</strong></div>
         <div className="summary-line"><span>PPN {numberValue(invoice.taxRate)}%</span><strong>{rupiah.format(numberValue(invoice.taxAmount))}</strong></div>
         <div className="summary-line total"><span>Grand total</span><strong style={{ color: "var(--blue)" }}>{rupiah.format(grandTotal)}</strong></div>
-        <div className="summary-line"><span>Status pembayaran</span><strong>{paymentLabel}</strong></div>
+        <div className="summary-line"><span>Status pembayaran</span><strong>{invoice.status === "CANCELLED" ? "BATAL" : paymentLabel}</strong></div>
         {paidAmount > 0 && <div className="summary-line"><span>Paid</span><strong>{rupiah.format(paidAmount)}</strong></div>}
         <div className="summary-line"><span>Sisa tagihan</span><strong>{rupiah.format(outstandingAmount)}</strong></div>
       </div>

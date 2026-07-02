@@ -15,6 +15,7 @@ const colors: Record<string, string> = {
 const labels: Record<string, string> = {
   PARTIAL_PAID: "DP",
   PAID: "LUNAS",
+  CANCELLED: "BATAL",
 };
 
 export function StatusBadge({ status }: { status: string }) {
