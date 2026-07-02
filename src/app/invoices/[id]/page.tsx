@@ -8,7 +8,7 @@ import { PaymentProofForm } from "@/components/payment-proof-form";
 import { StatusBadge } from "@/components/status-badge";
 import { terbilang } from "@/lib/business";
 import { db } from "@/lib/db";
-import { numberValue, rupiah, tanggal } from "@/lib/format";
+import { numberValue, rupiah, tanggal, tanggalWaktu } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +21,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
       client: true,
       bill: true,
       items: true,
-      payments: { orderBy: { paymentDate: "desc" } },
+      payments: { include: { createdBy: true }, orderBy: { paymentDate: "desc" } },
       shipment: { include: { carrier: true, containers: true } },
     },
   });
@@ -35,7 +35,8 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
   const isPaid = paidAmount > 0 && outstandingAmount <= 0;
   const visibleStatus = invoice.status === "CANCELLED" ? "CANCELLED" : isPaid ? "PAID" : invoice.status;
   const isOtherOrder = invoice.shipment.shipmentDirection === "LAIN_LAIN";
-  const showPaymentArea = invoice.status !== "DRAFT" && invoice.status !== "CANCELLED";
+  const showPaymentArea = invoice.status !== "DRAFT";
+  const allowPaymentInput = invoice.status !== "CANCELLED" && !isPaid;
   const paymentLabel = isPaid
     ? "LUNAS"
     : paidAmount > 0
@@ -156,27 +157,37 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
     </div>
 
     {showPaymentArea && <div className="grid-equal" style={{ marginTop: 20 }}>
-      {!isPaid && <div className="card">
+      {allowPaymentInput && <div className="card">
         <div className="card-head"><h3>Catat DP / pembayaran</h3></div>
         <div className="card-body"><PaymentForm invoiceId={id} max={outstandingAmount} /></div>
       </div>}
+      {invoice.status === "CANCELLED" && <div className="card">
+        <div className="card-head"><h3>Pembayaran dikunci</h3></div>
+        <div className="card-body"><div className="empty">Invoice sudah dibatalkan. Riwayat pembayaran tetap ditampilkan sebagai arsip, tetapi pembayaran baru tidak bisa ditambahkan.</div></div>
+      </div>}
       <div className="card">
         <div className="card-head"><h3>Riwayat pembayaran</h3></div>
-        <div className="card-body summary-stack">
-          {invoice.payments.map((payment) => <div className="summary-line" key={payment.id} style={{ alignItems: "flex-start", gap: 16 }}>
-            <span>
-              {tanggal.format(payment.paymentDate)} · {payment.method}
-              {payment.bankReference && <><br /><small style={{ color: "var(--muted)" }}>Ref: {payment.bankReference}</small></>}
-              {payment.notes && <><br /><small style={{ color: "var(--muted)" }}>{payment.notes}</small></>}
-            </span>
-            <strong>{rupiah.format(numberValue(payment.amount))}</strong>
-            <div style={{ minWidth: 240, textAlign: "right" }}>
-              {payment.proofFilePath
-                ? <a className="btn btn-secondary" href={`/api/payments/${payment.id}/proof`} target="_blank">Lihat bukti</a>
-                : <PaymentProofForm paymentId={payment.id} />}
-            </div>
-          </div>)}
-          {!invoice.payments.length && <div className="empty">Belum ada pembayaran.</div>}
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Tanggal bayar</th><th>Nominal</th><th>Metode / ref</th><th>Diinput</th><th>Catatan</th><th>Bukti</th></tr></thead>
+            <tbody>
+              {invoice.payments.map((payment) => <tr key={payment.id}>
+                <td>{tanggal.format(payment.paymentDate)}</td>
+                <td className="money"><strong>{rupiah.format(numberValue(payment.amount))}</strong></td>
+                <td>{payment.method}{payment.bankReference && <><br /><small style={{ color: "var(--muted)" }}>Ref: {payment.bankReference}</small></>}</td>
+                <td>{payment.createdBy.name}<br /><small style={{ color: "var(--muted)" }}>{tanggalWaktu.format(payment.createdAt)}</small></td>
+                <td style={{ maxWidth: 260 }}>{payment.notes || "-"}</td>
+                <td>
+                  {payment.proofFilePath
+                    ? <a className="btn btn-secondary" href={`/api/payments/${payment.id}/proof`} target="_blank">Lihat bukti</a>
+                    : invoice.status === "CANCELLED"
+                      ? <small style={{ color: "var(--muted)" }}>Belum ada bukti</small>
+                      : <PaymentProofForm paymentId={payment.id} />}
+                </td>
+              </tr>)}
+              {!invoice.payments.length && <tr><td colSpan={6} className="empty">Belum ada pembayaran.</td></tr>}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>}
