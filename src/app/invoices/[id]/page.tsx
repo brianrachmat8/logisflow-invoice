@@ -4,6 +4,7 @@ import { ArrowLeft, Download, FileCheck2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { ActionButton } from "@/components/action-button";
 import { PaymentForm } from "@/components/payment-form";
+import { PaymentProofForm } from "@/components/payment-proof-form";
 import { StatusBadge } from "@/components/status-badge";
 import { terbilang } from "@/lib/business";
 import { db } from "@/lib/db";
@@ -33,6 +34,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
   const wordsLabel = "TERBILANG";
   const isPaid = paidAmount > 0 && outstandingAmount <= 0;
   const isOtherOrder = invoice.shipment.shipmentDirection === "LAIN_LAIN";
+  const showPaymentArea = invoice.status !== "DRAFT";
   const paymentLabel = isPaid
     ? "LUNAS"
     : paidAmount > 0
@@ -70,10 +72,8 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
       </div>
       <div className="actions">
         {invoice.status === "DRAFT" && <ActionButton endpoint={`/api/invoices/${id}/finalize`} label="Finalkan invoice" confirm="Invoice final tidak dapat diedit langsung. Lanjutkan?" />}
-        {invoice.invoiceNumber && <>
-          <a className="btn btn-secondary" href={`/api/invoices/${id}/export/pdf`}><Download size={16}/> PDF</a>
-          <a className="btn btn-secondary" href={`/api/invoices/${id}/export/xlsx`}><Download size={16}/> Excel</a>
-        </>}
+        <a className="btn btn-secondary" href={`/api/invoices/${id}/export/pdf`}><Download size={16}/> PDF</a>
+        <a className="btn btn-secondary" href={`/api/invoices/${id}/export/xlsx`}><Download size={16}/> Excel</a>
       </div>
     </div>
 
@@ -153,17 +153,26 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
       </div>
     </div>
 
-    {invoice.status !== "DRAFT" && !isPaid && <div className="grid-equal" style={{ marginTop: 20 }}>
-      <div className="card">
+    {showPaymentArea && <div className="grid-equal" style={{ marginTop: 20 }}>
+      {!isPaid && <div className="card">
         <div className="card-head"><h3>Catat DP / pembayaran</h3></div>
         <div className="card-body"><PaymentForm invoiceId={id} max={outstandingAmount} /></div>
-      </div>
+      </div>}
       <div className="card">
         <div className="card-head"><h3>Riwayat pembayaran</h3></div>
         <div className="card-body summary-stack">
-          {invoice.payments.map((payment) => <div className="summary-line" key={payment.id}>
-            <span>{tanggal.format(payment.paymentDate)} · {payment.method}</span>
+          {invoice.payments.map((payment) => <div className="summary-line" key={payment.id} style={{ alignItems: "flex-start", gap: 16 }}>
+            <span>
+              {tanggal.format(payment.paymentDate)} · {payment.method}
+              {payment.bankReference && <><br /><small style={{ color: "var(--muted)" }}>Ref: {payment.bankReference}</small></>}
+              {payment.notes && <><br /><small style={{ color: "var(--muted)" }}>{payment.notes}</small></>}
+            </span>
             <strong>{rupiah.format(numberValue(payment.amount))}</strong>
+            <div style={{ minWidth: 240, textAlign: "right" }}>
+              {payment.proofFilePath
+                ? <a className="btn btn-secondary" href={`/api/payments/${payment.id}/proof`} target="_blank">Lihat bukti</a>
+                : <PaymentProofForm paymentId={payment.id} />}
+            </div>
           </div>)}
           {!invoice.payments.length && <div className="empty">Belum ada pembayaran.</div>}
         </div>
