@@ -43,10 +43,10 @@ export function ShipmentForm({
             <label>Klien *</label>
             <select name="clientId" required defaultValue=""><option value="" disabled>Pilih klien</option>{clients.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select>
           </div>
-          <div className="field">
+          {!isOtherOrder && <div className="field">
             <label>Carrier</label>
             <select name="carrierId" defaultValue=""><option value="">Belum ditentukan</option>{carriers.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select>
-          </div>
+          </div>}
           <div className="field">
             <label>Jenis order *</label>
             <select name="shipmentDirection" value={shipmentDirection} onChange={(event) => setShipmentDirection(event.target.value as ShipmentDirection)}>
@@ -54,7 +54,7 @@ export function ShipmentForm({
               <option value="IMPORT">Import</option>
               <option value="LAIN_LAIN">Lain-lain</option>
             </select>
-            <small>{isOtherOrder ? "Untuk invoice selain trucking/export/import. B/L dan kontainer tidak wajib." : "Pilih Export jika dokumen utamanya DO Number. Pilih Import jika dokumen utamanya B/L Number."}</small>
+            <small>{isOtherOrder ? "Untuk invoice selain trucking/export/import. B/L, kontainer, dan carrier tidak wajib." : "Pilih Export jika dokumen utamanya DO Number. Pilih Import jika dokumen utamanya B/L Number."}</small>
           </div>
           <div className="field">
             <label>{isOtherOrder ? "Nama pekerjaan" : "Vessel *"}</label>
