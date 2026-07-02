@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { fail, ok, requireUser } from "@/lib/api";
@@ -54,29 +55,41 @@ export async function POST(request: Request) {
     if (!isOtherOrder && !input.vessel?.trim()) return fail("Vessel wajib diisi.", 422);
     if (!isOtherOrder && !input.voyage?.trim()) return fail("Voyage wajib diisi.", 422);
 
-    const count = await db.shipment.count({
-      where: { createdAt: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) } },
-    });
-    const jobNumber = `JOB/${new Date().getFullYear()}/${String(new Date().getMonth() + 1).padStart(2, "0")}/${String(count + 1).padStart(4, "0")}`;
-    const shipment = await db.shipment.create({
-      data: {
-        clientId: input.clientId,
-        carrierId: input.carrierId || null,
-        vessel: isOtherOrder ? input.vessel?.trim() || "-" : input.vessel!.trim(),
-        voyage: isOtherOrder ? input.voyage?.trim() || "-" : input.voyage!.trim(),
-        shipmentDirection: input.shipmentDirection,
-        doNumber: input.doNumber.trim(),
-        shipmentDate: input.shipmentDate,
-        fieldTeamId: input.fieldTeamId || null,
-        internalPic: input.internalPic,
-        notes: input.notes,
-        jobNumber,
-        createdById: access.user.id,
-        bills: input.shipmentDirection === "IMPORT"
-          ? { create: { number: input.doNumber, notes: "B/L awal dari form import" } }
-          : undefined,
-      },
-    });
+    let shipment;
+    let jobNumber = "";
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      jobNumber = await nextJobNumber(attempt);
+      try {
+        shipment = await db.shipment.create({
+          data: {
+            clientId: input.clientId,
+            carrierId: input.carrierId || null,
+            vessel: isOtherOrder ? input.vessel?.trim() || "-" : input.vessel!.trim(),
+            voyage: isOtherOrder ? input.voyage?.trim() || "-" : input.voyage!.trim(),
+            shipmentDirection: input.shipmentDirection,
+            doNumber: input.doNumber.trim(),
+            shipmentDate: input.shipmentDate,
+            fieldTeamId: input.fieldTeamId || null,
+            internalPic: input.internalPic,
+            notes: input.notes,
+            jobNumber,
+            createdById: access.user.id,
+            bills: input.shipmentDirection === "IMPORT"
+              ? { create: { number: input.doNumber, notes: "B/L awal dari form import" } }
+              : undefined,
+          },
+        });
+        break;
+      } catch (error) {
+        const isDuplicateJobNumber = error instanceof Prisma.PrismaClientKnownRequestError
+          && error.code === "P2002"
+          && Array.isArray(error.meta?.target)
+          && error.meta.target.includes("jobNumber");
+        if (!isDuplicateJobNumber || attempt === 4) throw error;
+      }
+    }
+    if (!shipment) throw new Error("Gagal membuat nomor JOB baru.");
+
     await audit({
       userId: access.user.id,
       module: "SHIPMENT",
@@ -88,4 +101,18 @@ export async function POST(request: Request) {
   } catch (error) {
     return fail(error instanceof Error ? error.message : "Gagal membuat shipment.");
   }
+}
+
+async function nextJobNumber(offset = 0) {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const prefix = `JOB/${year}/${month}/`;
+  const latest = await db.shipment.findFirst({
+    where: { jobNumber: { startsWith: prefix } },
+    select: { jobNumber: true },
+    orderBy: { jobNumber: "desc" },
+  });
+  const latestSequence = latest?.jobNumber ? Number(latest.jobNumber.split("/").at(-1)) || 0 : 0;
+  return `${prefix}${String(latestSequence + 1 + offset).padStart(4, "0")}`;
 }
