@@ -33,13 +33,14 @@ export default async function ShipmentsPage() {
     </PageHead>
     <div className="card">
       <div className="filters"><input className="filter-input search" placeholder="Cari job, DO, referensi, atau klien..." /><select className="filter-input"><option>Semua status</option></select></div>
-      <div className="table-wrap"><table><thead><tr><th>Job order</th><th>Klien</th><th>Vessel / Pekerjaan</th><th>B/L</th><th>Kontainer</th><th>Tanggal</th><th>Status</th><th>Aksi</th></tr></thead>
+      <div className="table-wrap"><table><thead><tr><th>Job order</th><th>Klien</th><th>Pekerjaan</th><th>B/L</th><th>Kontainer</th><th>Tanggal</th><th>Status</th><th>Aksi</th></tr></thead>
         <tbody>{shipments.map((item) => {
           const hasLockedInvoice = item.invoices.some((invoice) => Boolean(invoice.invoiceNumber) || invoice._count.payments > 0 || !deletableInvoiceStatuses.includes(invoice.status));
           const isOtherOrder = item.shipmentDirection === "LAIN_LAIN";
           return <tr key={item.id}>
             <td className="primary-cell"><Link href={`/shipments/${item.id}`}><strong>{item.jobNumber}</strong><span>{orderLabel(item.shipmentDirection)} {item.doNumber}</span></Link></td>
-            <td>{item.client.name}</td><td>{item.vessel} / {item.voyage}<br /><small style={{ color: "var(--muted)" }}>{item.carrier?.name || "-"}</small></td>
+            <td>{item.client.name}</td>
+            <td>{item.vessel}{item.voyage && item.voyage !== "-" ? ` / ${item.voyage}` : ""}<br /><small style={{ color: "var(--muted)" }}>{isOtherOrder ? "Tanpa B/L dan kontainer" : item.carrier?.name || "Carrier belum ditentukan"}</small></td>
             <td>{isOtherOrder ? "-" : item._count.bills}</td><td>{isOtherOrder ? "-" : item._count.containers}</td><td>{tanggal.format(item.shipmentDate)}</td><td><StatusBadge status={item.status} /></td>
             <td><ShipmentDeleteButton shipmentId={item.id} disabled={hasLockedInvoice} /></td>
           </tr>;

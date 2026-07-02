@@ -49,10 +49,10 @@ export default async function ShipmentDetailPage({ params }: { params: Promise<{
         <h2 style={{ marginTop: 12 }}>{shipment.jobNumber}</h2>
         <p>{shipment.client.name} · {orderLabel(shipment.shipmentDirection)} · {documentLabel(shipment.shipmentDirection)} {shipment.doNumber}</p>
         <div className="detail-meta">
-          <div><span>{isOtherOrder ? "Pekerjaan / Kode" : "Vessel / Voyage"}</span><strong>{shipment.vessel} / {shipment.voyage}</strong></div>
-          <div><span>Carrier</span><strong>{shipment.carrier?.name || "-"}</strong></div>
-          <div><span>Tanggal</span><strong>{tanggal.format(shipment.shipmentDate)}</strong></div>
-          <div><span>Tim lapangan</span><strong>{shipment.fieldTeam?.name || "-"}</strong></div>
+          <div><span>{isOtherOrder ? "Detail pekerjaan" : "Vessel / Voyage"}</span><strong>{shipment.vessel}{shipment.voyage && shipment.voyage !== "-" ? ` / ${shipment.voyage}` : ""}</strong></div>
+          {!isOtherOrder && <div><span>Carrier</span><strong>{shipment.carrier?.name || "-"}</strong></div>}
+          <div><span>{isOtherOrder ? "Tanggal pekerjaan" : "Tanggal shipment"}</span><strong>{tanggal.format(shipment.shipmentDate)}</strong></div>
+          <div><span>{isOtherOrder ? "Penanggung jawab" : "Tim lapangan"}</span><strong>{shipment.fieldTeam?.name || "-"}</strong></div>
           <div><span>{isOtherOrder ? "Jenis order" : "Size kontainer"}</span><strong>{isOtherOrder ? "Lain-lain" : summarizeContainerSizes(shipment.bills.flatMap((bill) => bill.containers))}</strong></div>
         </div>
       </div>
@@ -96,7 +96,7 @@ export default async function ShipmentDetailPage({ params }: { params: Promise<{
         <div className="card-head"><h3>B/L dan kontainer</h3></div>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>B/L Number (Impor)</th><th>Kontainer</th><th>Size 20/40</th><th>Daftar nomor</th></tr></thead>
+            <thead><tr><th>{shipment.shipmentDirection === "EXPORT" ? "B/L Number" : "B/L Number (Impor)"}</th><th>Kontainer</th><th>Size 20/40</th><th>Daftar nomor</th></tr></thead>
             <tbody>
               {shipment.bills.map((bill) => <tr key={bill.id}>
                 <td><strong>{bill.number}</strong></td>
@@ -150,7 +150,7 @@ export default async function ShipmentDetailPage({ params }: { params: Promise<{
       <div className="card-head"><h3>Invoice hasil generate</h3></div>
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Nomor</th><th>Tipe</th><th>{isOtherOrder ? "Referensi" : "B/L Number (Impor)"}</th><th>Total</th><th>Status</th><th>Aksi</th></tr></thead>
+          <thead><tr><th>Nomor</th><th>Tipe</th><th>{isOtherOrder ? "Referensi" : "B/L Number"}</th><th>Total</th><th>Status</th><th>Aksi</th></tr></thead>
           <tbody>
             {shipment.invoices.map((invoice) => <tr key={invoice.id}>
               <td>{invoice.invoiceNumber || invoice.draftNumber}</td>
