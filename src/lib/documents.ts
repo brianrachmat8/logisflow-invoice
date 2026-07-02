@@ -22,9 +22,10 @@ export async function generateInvoiceDocuments(invoiceId: string) {
       items: true,
     },
   });
-  if (!invoice?.invoiceNumber) throw new Error("Invoice final tidak ditemukan.");
+  if (!invoice) throw new Error("Invoice tidak ditemukan.");
+  const documentNumber = invoice.invoiceNumber || invoice.draftNumber;
   await fs.mkdir(storageRoot, { recursive: true });
-  const safeName = invoice.invoiceNumber.replaceAll("/", "-");
+  const safeName = documentNumber.replaceAll("/", "-");
   const pdfPath = path.join(storageRoot, `${safeName}.pdf`);
   const excelPath = path.join(storageRoot, `${safeName}.xlsx`);
 
@@ -32,6 +33,7 @@ export async function generateInvoiceDocuments(invoiceId: string) {
     buildPdf(invoice, pdfPath),
     buildExcel(invoice, excelPath),
   ]);
+  await db.generatedFile.deleteMany({ where: { invoiceId, type: { in: ["PDF", "EXCEL"] } } });
   await db.generatedFile.createMany({
     data: [
       { invoiceId, type: "PDF", path: pdfPath },
@@ -66,6 +68,7 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
   const marginX = 34;
   const contentWidth = pageWidth - marginX * 2;
   const outstandingAmount = documentOutstandingAmount(invoice);
+  const documentNumber = invoice.invoiceNumber || invoice.draftNumber;
 
   const drawText = (text: string, x: number, y: number, size = 9, font = regular, color = navy) => {
     page.drawText(sanitize(text), { x, y, size, font, color });
@@ -94,7 +97,7 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
   }
   drawRight("INVOICE", pageWidth - marginX, 778, 25, bold, red);
 
-  drawText(`Invoice No ${invoice.invoiceNumber}`, marginX + 4, 728, 11, bold, navy);
+  drawText(`Invoice No ${documentNumber}`, marginX + 4, 728, 11, bold, navy);
   drawText(tanggal.format(invoice.invoiceDate), marginX + 4, 708, 12, bold, navy);
   drawText(`Jatuh Tempo ${tanggal.format(invoice.dueDate)}`, marginX + 4, 688, 9, bold, navy);
 
@@ -195,6 +198,7 @@ async function buildExcel(invoice: InvoiceDocument, filePath: string) {
     pageSetup: { paperSize: 9, orientation: "portrait", fitToPage: true, fitToWidth: 1, fitToHeight: 1 },
     properties: { defaultRowHeight: 19 },
   });
+  const documentNumber = invoice.invoiceNumber || invoice.draftNumber;
   sheet.columns = [
     { key: "a", width: 6 }, { key: "b", width: 34 }, { key: "c", width: 12 },
     { key: "d", width: 18 }, { key: "e", width: 20 },
@@ -209,7 +213,7 @@ async function buildExcel(invoice: InvoiceDocument, filePath: string) {
   sheet.mergeCells("A3:C3");
   sheet.getCell("A3").value = invoice.company.address;
   sheet.getCell("D3").value = "Nomor";
-  sheet.getCell("E3").value = invoice.invoiceNumber;
+  sheet.getCell("E3").value = documentNumber;
   sheet.getCell("D4").value = "Tanggal";
   sheet.getCell("E4").value = tanggal.format(invoice.invoiceDate);
   sheet.getCell("D5").value = "Jatuh tempo";
