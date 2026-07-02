@@ -22,9 +22,10 @@ export async function generateInvoiceDocuments(invoiceId: string) {
       items: true,
     },
   });
-  if (!invoice?.invoiceNumber) throw new Error("Invoice final tidak ditemukan.");
+  if (!invoice) throw new Error("Invoice tidak ditemukan.");
+  const documentNumber = invoice.invoiceNumber || invoice.draftNumber;
   await fs.mkdir(storageRoot, { recursive: true });
-  const safeName = invoice.invoiceNumber.replaceAll("/", "-");
+  const safeName = documentNumber.replaceAll("/", "-");
   const pdfPath = path.join(storageRoot, `${safeName}.pdf`);
   const excelPath = path.join(storageRoot, `${safeName}.xlsx`);
 
@@ -32,6 +33,7 @@ export async function generateInvoiceDocuments(invoiceId: string) {
     buildPdf(invoice, pdfPath),
     buildExcel(invoice, excelPath),
   ]);
+  await db.generatedFile.deleteMany({ where: { invoiceId, type: { in: ["PDF", "EXCEL"] } } });
   await db.generatedFile.createMany({
     data: [
       { invoiceId, type: "PDF", path: pdfPath },
@@ -65,6 +67,8 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
   const pageWidth = 595.28;
   const marginX = 34;
   const contentWidth = pageWidth - marginX * 2;
+  const outstandingAmount = documentOutstandingAmount(invoice);
+  const documentNumber = invoice.invoiceNumber || invoice.draftNumber;
 
   const drawText = (text: string, x: number, y: number, size = 9, font = regular, color = navy) => {
     page.drawText(sanitize(text), { x, y, size, font, color });
@@ -81,15 +85,19 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
   page.drawRectangle({ x: 0, y: 0, width: pageWidth, height: 841.89, color: white });
 
   if (logoImage) {
-    const logoSize = fitImage(logoImage.width, logoImage.height, 112, 54);
+    const logoSize = fitImage(logoImage.width, logoImage.height, 70, 50);
     page.drawImage(logoImage, { x: marginX, y: 764, width: logoSize.width, height: logoSize.height });
+    drawText(invoice.company.name, marginX + logoSize.width + 14, 784, 16, bold, navy);
+    wrapText(invoice.company.address, 210, 7, regular).slice(0, 1).forEach((row) => {
+      drawText(row, marginX + logoSize.width + 14, 771, 7, regular, navy);
+    });
   } else {
     page.drawRectangle({ x: marginX, y: 782, width: 22, height: 22, color: red });
     drawText(invoice.company.name, marginX + 36, 779, 20, bold, navy);
   }
   drawRight("INVOICE", pageWidth - marginX, 778, 25, bold, red);
 
-  drawText(`Invoice No ${invoice.invoiceNumber}`, marginX + 4, 728, 11, bold, navy);
+  drawText(`Invoice No ${documentNumber}`, marginX + 4, 728, 11, bold, navy);
   drawText(tanggal.format(invoice.invoiceDate), marginX + 4, 708, 12, bold, navy);
   drawText(`Jatuh Tempo ${tanggal.format(invoice.dueDate)}`, marginX + 4, 688, 9, bold, navy);
 
@@ -107,9 +115,9 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
   if (invoice.client.email) drawText(`Email: ${invoice.client.email}`, leftX + 10, panelY - 94, 9, regular, navy);
   if (invoice.client.phone) drawText(`UP: ${invoice.client.phone}`, leftX + 10, panelY - 108, 9, regular, navy);
 
-  invoiceDocumentMeta(invoice).slice(0, 5).forEach(([label, value], index) => {
+  invoiceDocumentMeta(invoice).slice(0, 6).forEach(([label, value], index) => {
     const rowY = panelY - 24 - index * 18;
-    drawText(`${label}: ${value}`.slice(0, 46), rightX + 18, rowY, index === 4 ? 11 : 9, bold, navy);
+    drawText(`${label}: ${value}`.slice(0, 46), rightX + 18, rowY, index >= 4 ? 10 : 9, bold, navy);
   });
 
   const tableTop = 520;
@@ -147,10 +155,13 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
   drawRight(formatNumber(invoice.grandTotal.toNumber()), totalsValueX, totalBarY + 5, 11, bold, white);
   const outstandingY = totalBarY - 20;
   drawText("Sisa Tagihan", totalsX - 22, outstandingY, 10, bold, navy);
-  drawRight(formatNumber(invoice.outstandingAmount.toNumber()), totalsValueX, outstandingY, 10, regular, navy);
+  drawRight(formatNumber(outstandingAmount), totalsValueX, outstandingY, 10, regular, navy);
+  const paymentStatusY = outstandingY - 16;
+  drawText("Status", totalsX - 22, paymentStatusY, 10, bold, navy);
+  drawRight(documentPaymentStatusLabel(invoice), totalsValueX, paymentStatusY, 10, bold, navy);
 
   const words = paymentAwareWords(invoice);
-  const wordsY = Math.max(outstandingY - 34, 136);
+  const wordsY = Math.max(paymentStatusY - 34, 136);
   drawText(`${words.label}: ${words.text}`, marginX - 10, wordsY, 12, bold, rgb(0, 0, 0));
 
   const payY = Math.max(wordsY - 48, 88);
@@ -165,7 +176,7 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
     drawText("Belum ada rekening pembayaran.", marginX, payY - 24, 10, regular, navy);
   }
 
-  const signY = Math.max(payY - 4, 74);
+  const signY = Math.max(payY - 30, 72);
   drawText(sanitize(invoice.company.closingGreeting || "Hormat kami"), 420, signY, 11, bold, navy);
   if (signatureImage) {
     const signatureSize = fitImage(signatureImage.width, signatureImage.height, 112, 42);
@@ -174,7 +185,7 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
   drawText(sanitize(invoice.company.signerName || invoice.company.name), 390, signY - 60, 10, bold, navy);
   if (invoice.company.signerTitle) drawText(sanitize(invoice.company.signerTitle), 390, signY - 74, 9, regular, navy);
 
-  drawText("Thank you!", marginX - 6, 28, 24, bold, red);
+  drawText("Thank you!", marginX - 6, 20, 24, bold, red);
 
   const bytes = await pdf.save();
   await fs.writeFile(filePath, bytes);
@@ -187,6 +198,7 @@ async function buildExcel(invoice: InvoiceDocument, filePath: string) {
     pageSetup: { paperSize: 9, orientation: "portrait", fitToPage: true, fitToWidth: 1, fitToHeight: 1 },
     properties: { defaultRowHeight: 19 },
   });
+  const documentNumber = invoice.invoiceNumber || invoice.draftNumber;
   sheet.columns = [
     { key: "a", width: 6 }, { key: "b", width: 34 }, { key: "c", width: 12 },
     { key: "d", width: 18 }, { key: "e", width: 20 },
@@ -201,17 +213,17 @@ async function buildExcel(invoice: InvoiceDocument, filePath: string) {
   sheet.mergeCells("A3:C3");
   sheet.getCell("A3").value = invoice.company.address;
   sheet.getCell("D3").value = "Nomor";
-  sheet.getCell("E3").value = invoice.invoiceNumber;
+  sheet.getCell("E3").value = documentNumber;
   sheet.getCell("D4").value = "Tanggal";
   sheet.getCell("E4").value = tanggal.format(invoice.invoiceDate);
   sheet.getCell("D5").value = "Jatuh tempo";
   sheet.getCell("E5").value = tanggal.format(invoice.dueDate);
   sheet.getCell("A7").value = "Kepada";
   sheet.getCell("B7").value = invoice.client.name;
-  invoiceDocumentMeta(invoice).slice(0, 4).forEach(([label, value], index) => {
-    const row = 8 + (index % 2);
-    const labelColumn = index < 2 ? "A" : "D";
-    const valueColumn = index < 2 ? "B" : "E";
+  invoiceDocumentMeta(invoice).slice(0, 5).forEach(([label, value], index) => {
+    const row = 8 + (index % 3);
+    const labelColumn = index < 3 ? "A" : "D";
+    const valueColumn = index < 3 ? "B" : "E";
     sheet.getCell(`${labelColumn}${row}`).value = label;
     sheet.getCell(`${valueColumn}${row}`).value = value;
   });
@@ -227,6 +239,7 @@ async function buildExcel(invoice: InvoiceDocument, filePath: string) {
     sheet.addRow([index + 1, item.description, item.quantity.toNumber(), item.unitPrice.toNumber(), item.totalAmount.toNumber()]);
   });
   const totalStart = 12 + invoice.items.length;
+  const outstandingAmount = documentOutstandingAmount(invoice);
   sheet.getCell(`D${totalStart}`).value = "Subtotal";
   sheet.getCell(`E${totalStart}`).value = invoice.subtotal.toNumber();
   sheet.getCell(`D${totalStart + 1}`).value = `PPN ${invoice.taxRate}%`;
@@ -240,11 +253,12 @@ async function buildExcel(invoice: InvoiceDocument, filePath: string) {
     sheet.getCell(`D${afterTotalRow}`).value = "DP / Paid";
     sheet.getCell(`E${afterTotalRow}`).value = invoice.amountPaid.toNumber();
     afterTotalRow += 1;
-    if (invoice.outstandingAmount.toNumber() > 0) {
-      sheet.getCell(`D${afterTotalRow}`).value = "Sisa Tagihan";
-      sheet.getCell(`E${afterTotalRow}`).value = invoice.outstandingAmount.toNumber();
-      afterTotalRow += 1;
-    }
+    sheet.getCell(`D${afterTotalRow}`).value = "Sisa Tagihan";
+    sheet.getCell(`E${afterTotalRow}`).value = outstandingAmount;
+    afterTotalRow += 1;
+    sheet.getCell(`D${afterTotalRow}`).value = "Status";
+    sheet.getCell(`E${afterTotalRow}`).value = documentPaymentStatusLabel(invoice);
+    afterTotalRow += 1;
   }
   sheet.mergeCells(`A${afterTotalRow + 1}:E${afterTotalRow + 1}`);
   const words = paymentAwareWords(invoice);
@@ -314,7 +328,6 @@ function invoiceDocumentMeta(invoice: InvoiceDocument): [string, string][] {
     return [
       ["REFERENSI", invoice.shipment.doNumber || "-"],
       ["JENIS PEKERJAAN", shipmentWorkLabel(invoice)],
-      ["CARRIER / TIM", invoice.shipment.carrier?.name || "-"],
       ["TAGIHAN", invoiceBlLabel(invoice)],
       ["JENIS ORDER", "Lain-lain"],
     ];
@@ -326,6 +339,7 @@ function invoiceDocumentMeta(invoice: InvoiceDocument): [string, string][] {
     ["CARRIER", invoice.shipment.carrier?.name || "-"],
     ["B/L NUMBER (IMPOR)", invoiceBlLabel(invoice)],
     ["SIZE 20/40", summarizeContainerSizes(invoice.shipment.containers)],
+    ["NO KONTAINER", summarizeContainerNumbers(invoice.shipment.containers)],
   ];
 }
 
@@ -362,10 +376,26 @@ function paymentAccounts(invoice: InvoiceDocument) {
   return [];
 }
 
+function documentOutstandingAmount(invoice: InvoiceDocument) {
+  const grandTotal = invoice.grandTotal.toNumber();
+  const amountPaid = invoice.amountPaid.toNumber();
+  return Math.round(Math.max(grandTotal - amountPaid, 0));
+}
+
+function documentPaymentStatusLabel(invoice: InvoiceDocument) {
+  const paid = invoice.amountPaid.toNumber();
+  const outstanding = documentOutstandingAmount(invoice);
+  if (paid > 0 && outstanding <= 0) return "LUNAS";
+  if (paid > 0) return "DP / Partial";
+  return "Belum ada pembayaran";
+}
+
 function paymentAwareWords(invoice: InvoiceDocument) {
+  const amountPaid = invoice.amountPaid.toNumber();
+  const amount = amountPaid > 0 ? documentOutstandingAmount(invoice) : invoice.grandTotal.toNumber();
   return {
     label: "TERBILANG",
-    text: terbilang(invoice.grandTotal.toNumber()),
+    text: terbilang(amount),
   };
 }
 
@@ -377,4 +407,9 @@ function summarizeContainerSizes(containers: { size: string }[]) {
     return acc;
   }, {});
   return Object.entries(groups).map(([size, count]) => `${size}: ${count}`).join(" | ");
+}
+
+function summarizeContainerNumbers(containers: { number: string }[]) {
+  if (!containers.length) return "-";
+  return containers.map((container) => container.number).join(", ");
 }
