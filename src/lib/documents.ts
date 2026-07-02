@@ -112,9 +112,9 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
   if (invoice.client.email) drawText(`Email: ${invoice.client.email}`, leftX + 10, panelY - 94, 9, regular, navy);
   if (invoice.client.phone) drawText(`UP: ${invoice.client.phone}`, leftX + 10, panelY - 108, 9, regular, navy);
 
-  invoiceDocumentMeta(invoice).slice(0, 5).forEach(([label, value], index) => {
+  invoiceDocumentMeta(invoice).slice(0, 6).forEach(([label, value], index) => {
     const rowY = panelY - 24 - index * 18;
-    drawText(`${label}: ${value}`.slice(0, 46), rightX + 18, rowY, index === 4 ? 11 : 9, bold, navy);
+    drawText(`${label}: ${value}`.slice(0, 46), rightX + 18, rowY, index >= 4 ? 10 : 9, bold, navy);
   });
 
   const tableTop = 520;
@@ -153,9 +153,12 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
   const outstandingY = totalBarY - 20;
   drawText("Sisa Tagihan", totalsX - 22, outstandingY, 10, bold, navy);
   drawRight(formatNumber(outstandingAmount), totalsValueX, outstandingY, 10, regular, navy);
+  const paymentStatusY = outstandingY - 16;
+  drawText("Status", totalsX - 22, paymentStatusY, 10, bold, navy);
+  drawRight(documentPaymentStatusLabel(invoice), totalsValueX, paymentStatusY, 10, bold, navy);
 
   const words = paymentAwareWords(invoice);
-  const wordsY = Math.max(outstandingY - 34, 136);
+  const wordsY = Math.max(paymentStatusY - 34, 136);
   drawText(`${words.label}: ${words.text}`, marginX - 10, wordsY, 12, bold, rgb(0, 0, 0));
 
   const payY = Math.max(wordsY - 48, 88);
@@ -213,10 +216,10 @@ async function buildExcel(invoice: InvoiceDocument, filePath: string) {
   sheet.getCell("E5").value = tanggal.format(invoice.dueDate);
   sheet.getCell("A7").value = "Kepada";
   sheet.getCell("B7").value = invoice.client.name;
-  invoiceDocumentMeta(invoice).slice(0, 4).forEach(([label, value], index) => {
-    const row = 8 + (index % 2);
-    const labelColumn = index < 2 ? "A" : "D";
-    const valueColumn = index < 2 ? "B" : "E";
+  invoiceDocumentMeta(invoice).slice(0, 5).forEach(([label, value], index) => {
+    const row = 8 + (index % 3);
+    const labelColumn = index < 3 ? "A" : "D";
+    const valueColumn = index < 3 ? "B" : "E";
     sheet.getCell(`${labelColumn}${row}`).value = label;
     sheet.getCell(`${valueColumn}${row}`).value = value;
   });
@@ -246,11 +249,12 @@ async function buildExcel(invoice: InvoiceDocument, filePath: string) {
     sheet.getCell(`D${afterTotalRow}`).value = "DP / Paid";
     sheet.getCell(`E${afterTotalRow}`).value = invoice.amountPaid.toNumber();
     afterTotalRow += 1;
-    if (outstandingAmount > 0) {
-      sheet.getCell(`D${afterTotalRow}`).value = "Sisa Tagihan";
-      sheet.getCell(`E${afterTotalRow}`).value = outstandingAmount;
-      afterTotalRow += 1;
-    }
+    sheet.getCell(`D${afterTotalRow}`).value = "Sisa Tagihan";
+    sheet.getCell(`E${afterTotalRow}`).value = outstandingAmount;
+    afterTotalRow += 1;
+    sheet.getCell(`D${afterTotalRow}`).value = "Status";
+    sheet.getCell(`E${afterTotalRow}`).value = documentPaymentStatusLabel(invoice);
+    afterTotalRow += 1;
   }
   sheet.mergeCells(`A${afterTotalRow + 1}:E${afterTotalRow + 1}`);
   const words = paymentAwareWords(invoice);
@@ -320,7 +324,6 @@ function invoiceDocumentMeta(invoice: InvoiceDocument): [string, string][] {
     return [
       ["REFERENSI", invoice.shipment.doNumber || "-"],
       ["JENIS PEKERJAAN", shipmentWorkLabel(invoice)],
-      ["CARRIER / TIM", invoice.shipment.carrier?.name || "-"],
       ["TAGIHAN", invoiceBlLabel(invoice)],
       ["JENIS ORDER", "Lain-lain"],
     ];
@@ -332,6 +335,7 @@ function invoiceDocumentMeta(invoice: InvoiceDocument): [string, string][] {
     ["CARRIER", invoice.shipment.carrier?.name || "-"],
     ["B/L NUMBER (IMPOR)", invoiceBlLabel(invoice)],
     ["SIZE 20/40", summarizeContainerSizes(invoice.shipment.containers)],
+    ["NO KONTAINER", summarizeContainerNumbers(invoice.shipment.containers)],
   ];
 }
 
@@ -374,6 +378,14 @@ function documentOutstandingAmount(invoice: InvoiceDocument) {
   return Math.round(Math.max(grandTotal - amountPaid, 0));
 }
 
+function documentPaymentStatusLabel(invoice: InvoiceDocument) {
+  const paid = invoice.amountPaid.toNumber();
+  const outstanding = documentOutstandingAmount(invoice);
+  if (paid > 0 && outstanding <= 0) return "LUNAS";
+  if (paid > 0) return "DP / Partial";
+  return "Belum ada pembayaran";
+}
+
 function paymentAwareWords(invoice: InvoiceDocument) {
   const amountPaid = invoice.amountPaid.toNumber();
   const amount = amountPaid > 0 ? documentOutstandingAmount(invoice) : invoice.grandTotal.toNumber();
@@ -391,4 +403,9 @@ function summarizeContainerSizes(containers: { size: string }[]) {
     return acc;
   }, {});
   return Object.entries(groups).map(([size, count]) => `${size}: ${count}`).join(" | ");
+}
+
+function summarizeContainerNumbers(containers: { number: string }[]) {
+  if (!containers.length) return "-";
+  return containers.map((container) => container.number).join(", ");
 }
