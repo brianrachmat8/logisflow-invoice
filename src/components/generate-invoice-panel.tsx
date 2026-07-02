@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LoaderCircle } from "lucide-react";
 
@@ -105,6 +106,9 @@ export function GenerateInvoicePanel({
         <div className="card-body" style={{ display: "grid", gap: 12 }}>
           <strong>Preview simulasi invoice</strong>
           <small style={{ color: "rgba(255,255,255,.72)" }}>Ini hanya hitungan sementara. Nomor invoice belum dibuat dan database belum berubah.</small>
+          <Link className="btn btn-secondary" href={`/shipments/${shipmentId}/invoice-preview?mode=${effectiveMode}`} target="_blank" style={{ width: "fit-content" }}>
+            Buka preview visual
+          </Link>
           <div style={{ display: "grid", gap: 10 }}>
             {preview.invoices.map((invoice) => <div key={invoice.key} style={{ borderTop: "1px solid rgba(255,255,255,.16)", paddingTop: 10 }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
