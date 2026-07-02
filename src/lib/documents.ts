@@ -195,11 +195,12 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
   }
 
   const signY = Math.max(payY - 60, 126);
-  drawText(sanitize(invoice.company.closingGreeting || "Hormat kami"), 420, signY, 11, bold, navy);
+  const closingGreeting = sanitize(invoice.company.closingGreeting || "Hormat kami");
   if (stampImage) {
     const stampSize = fitImage(stampImage.width, stampImage.height, 128, 76);
     page.drawImage(stampImage, { x: 390, y: signY - 72, width: stampSize.width, height: stampSize.height });
   }
+  drawText(closingGreeting, 420, signY, 11, bold, navy);
   if (signatureImage) {
     const signatureSize = fitImage(signatureImage.width, signatureImage.height, 112, 42);
     page.drawImage(signatureImage, { x: 402, y: signY - 50, width: signatureSize.width, height: signatureSize.height });
