@@ -13,6 +13,10 @@ type PageProps = {
   searchParams: Promise<{ mode?: string }>;
 };
 
+function companyStampKey(companyId: string) {
+  return `company:${companyId}:stampPath`;
+}
+
 export default async function InvoicePreviewPage({ params, searchParams }: PageProps) {
   const { id } = await params;
   const query = await searchParams;
@@ -23,6 +27,7 @@ export default async function InvoicePreviewPage({ params, searchParams }: PageP
   const company = await db.company.findFirst({ where: { isDefault: true }, include: { bankAccounts: { where: { status: "ACTIVE" }, orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }] } } })
     ?? await db.company.findFirst({ orderBy: { createdAt: "asc" }, include: { bankAccounts: { where: { status: "ACTIVE" }, orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }] } } });
   if (!company) notFound();
+  const stampSetting = await db.appSetting.findUnique({ where: { key: companyStampKey(company.id) } });
 
   const groups = [...split.jasa, ...split.reimbursement];
   const totalGrand = groups.reduce((sum, group) => sum + group.grandTotal, 0);
@@ -59,6 +64,7 @@ export default async function InvoicePreviewPage({ params, searchParams }: PageP
         return <InvoicePaper
           key={`${group.type}-${group.billId || "combined"}-${index}`}
           company={company}
+          hasStamp={Boolean(stampSetting?.value)}
           shipment={shipment}
           group={group}
           invoiceDate={invoiceDate}
@@ -75,6 +81,7 @@ export default async function InvoicePreviewPage({ params, searchParams }: PageP
 
 function InvoicePaper({
   company,
+  hasStamp,
   shipment,
   group,
   invoiceDate,
@@ -85,6 +92,7 @@ function InvoicePaper({
   words,
 }: {
   company: any;
+  hasStamp: boolean;
   shipment: any;
   group: any;
   invoiceDate: Date;
@@ -100,11 +108,13 @@ function InvoicePaper({
 
   return <section style={paperStyle}>
     <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 28 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <div style={{ width: 42, height: 42, borderRadius: 8, background: "#0b63ce", color: "white", display: "grid", placeItems: "center", fontWeight: 800 }}>{company.name.slice(0, 2).toUpperCase()}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, maxWidth: 390 }}>
+        {company.logoPath
+          ? <img src={`/api/company-assets/logo?companyId=${company.id}`} alt="Logo perusahaan" style={{ width: 54, maxHeight: 42, objectFit: "contain" }} />
+          : <div style={{ width: 42, height: 42, borderRadius: 8, background: "#0b63ce", color: "white", display: "grid", placeItems: "center", fontWeight: 800 }}>{company.name.slice(0, 2).toUpperCase()}</div>}
         <div>
           <h2 style={{ margin: 0, color: "#0b1739", fontSize: 20 }}>{company.name}</h2>
-          <p style={{ margin: "4px 0 0", color: "#667085", fontSize: 11 }}>{company.address}</p>
+          <p style={{ margin: "4px 0 0", color: "#667085", fontSize: 11, lineHeight: 1.35 }}>{company.address}</p>
         </div>
       </div>
       <div style={{ textAlign: "right" }}>
@@ -127,13 +137,6 @@ function InvoicePaper({
       </InfoBox>
     </div>
 
-    {!isOtherOrder && shipment.containers.length > 0 && <div style={{ marginTop: 22, padding: "12px 14px", background: "#f4f7fb", border: "1px solid #d9e2ef" }}>
-      <strong style={{ color: "#0b1739", fontSize: 11 }}>NO KONTAINER</strong>
-      <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "5px 14px" }}>
-        {shipment.containers.slice(0, 24).map((container: any) => <span key={container.id} style={{ color: "#0b1739", fontSize: 10 }}>{container.number}</span>)}
-      </div>
-    </div>}
-
     <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 26, color: "#0b1739" }}>
       <thead>
         <tr style={{ background: "#0b1739", color: "white" }}>
@@ -153,7 +156,14 @@ function InvoicePaper({
       </tbody>
     </table>
 
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: 38, marginTop: 34, alignItems: "start" }}>
+    {!isOtherOrder && shipment.containers.length > 0 && <div style={{ marginTop: 22, width: 270, minHeight: 112, padding: "10px 12px", background: "#f8fafc", border: "1px solid #d9e2ef" }}>
+      <strong style={{ color: "#0b1739", fontSize: 10 }}>NO KONTAINER</strong>
+      <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "4px 10px" }}>
+        {shipment.containers.slice(0, 24).map((container: any) => <span key={container.id} style={{ color: "#0b1739", fontSize: 9 }}>{container.number}</span>)}
+      </div>
+    </div>}
+
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: 38, marginTop: isOtherOrder ? 34 : 20, alignItems: "start" }}>
       <div>
         <p style={{ margin: "0 0 22px", color: "#111", fontSize: 16, fontWeight: 800 }}>TERBILANG: {words}</p>
         <InfoBox title="Payment Info" narrow>
@@ -173,11 +183,14 @@ function InvoicePaper({
         <div style={{ marginTop: 8, background: "#0b1739", color: "white", padding: "9px 12px", display: "flex", justifyContent: "space-between", fontWeight: 800 }}>
           <span>Total</span><span>{rupiah.format(group.grandTotal)}</span>
         </div>
-        <div style={{ textAlign: "center", marginTop: 74, color: "#0b1739" }}>
-          <p style={{ fontWeight: 800 }}>Hormat Saya</p>
-          <div style={{ height: 70 }} />
-          <p style={{ fontWeight: 800 }}>{company.signerName || company.name}</p>
-          {company.signerTitle && <p style={{ marginTop: 4 }}>{company.signerTitle}</p>}
+        <div style={{ position: "relative", textAlign: "center", marginTop: 84, color: "#0b1739", minHeight: 150 }}>
+          {hasStamp && <img src={`/api/company-assets/stamp?companyId=${company.id}`} alt="Stampel perusahaan" style={{ position: "absolute", zIndex: 0, left: "50%", top: 22, transform: "translateX(-50%)", width: 150, maxHeight: 90, objectFit: "contain", opacity: .72 }} />}
+          <p style={{ position: "relative", zIndex: 2, fontWeight: 800, margin: 0 }}>{company.closingGreeting || "Hormat Saya"}</p>
+          <div style={{ position: "relative", zIndex: 2, height: 78, display: "grid", placeItems: "center" }}>
+            {company.signaturePath && <img src={`/api/company-assets/signature?companyId=${company.id}`} alt="TTD perusahaan" style={{ maxWidth: 120, maxHeight: 58, objectFit: "contain" }} />}
+          </div>
+          <p style={{ position: "relative", zIndex: 2, fontWeight: 800, margin: 0 }}>{company.signerName || company.name}</p>
+          {company.signerTitle && <p style={{ position: "relative", zIndex: 2, marginTop: 4 }}>{company.signerTitle}</p>}
         </div>
       </div>
     </div>
@@ -201,7 +214,7 @@ function invoiceDetails(shipment: any, group: any): [string, string][] {
   if (shipment.shipmentDirection === "LAIN_LAIN") {
     return [
       ["REFERENSI", shipment.doNumber || "-"],
-      ["JENIS PEKERJAAN", `${shipment.vessel || "-"} / ${shipment.voyage || "-"}`],
+      ["JENIS PEKERJAAN", cleanWorkLabel(shipment.vessel, shipment.voyage)],
       ["TAGIHAN", group.type === "JASA" ? "Jasa Gabungan" : "Reimbursement Gabungan"],
       ["JENIS ORDER", "Lain-lain"],
     ];
@@ -211,9 +224,16 @@ function invoiceDetails(shipment: any, group: any): [string, string][] {
     [shipment.shipmentDirection === "EXPORT" ? "DO NUMBER (EXPORT)" : "B/L NUMBER (IMPORT)", shipment.doNumber],
     ["VESSEL / VOYAGE", `${shipment.vessel} / ${shipment.voyage}`],
     ["CARRIER", shipment.carrier?.name || "-"],
-    ["B/L NUMBER (IMPOR)", group.billNumber || (group.type === "JASA" ? "Gabungan" : "Reimbursement Gabungan")],
+    ["B/L NUMBER", group.billNumber || (group.type === "JASA" ? "Gabungan" : "Reimbursement Gabungan")],
     ["SIZE 20/40", summarizeContainerSizes(shipment.containers)],
   ];
+}
+
+function cleanWorkLabel(name?: string, reference?: string) {
+  const left = name?.trim();
+  const right = reference?.trim();
+  if (left && right && right !== "-") return `${left} / ${right}`;
+  return left || right || "-";
 }
 
 function summarizeContainerSizes(containers: { size: string }[]) {
