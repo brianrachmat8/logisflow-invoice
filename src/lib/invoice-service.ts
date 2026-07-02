@@ -121,7 +121,7 @@ export async function generateDraftInvoices(
           grandTotal: new Prisma.Decimal(group.grandTotal),
           amountPaid: new Prisma.Decimal(paidFromAdvanceDp),
           outstandingAmount: new Prisma.Decimal(outstandingAmount),
-          amountInWords: terbilang(group.grandTotal),
+          amountInWords: terbilang(paidFromAdvanceDp > 0 ? outstandingAmount : group.grandTotal),
           createdById: userId,
           items: {
             create: group.items.map((item) => ({
@@ -260,8 +260,8 @@ export async function recordPayment(
     const outstanding = invoice.outstandingAmount.toNumber();
     if (input.amount > outstanding) throw new Error("Pembayaran melebihi sisa tagihan.");
 
-    const newPaid = invoice.amountPaid.toNumber() + input.amount;
-    const newOutstanding = invoice.grandTotal.toNumber() - newPaid;
+    const newPaid = roundMoney(invoice.amountPaid.toNumber() + input.amount);
+    const newOutstanding = roundMoney(invoice.grandTotal.toNumber() - newPaid);
     const status = newOutstanding === 0 ? "PAID" : "PARTIAL_PAID";
     const payment = await tx.payment.create({
       data: {
@@ -280,6 +280,7 @@ export async function recordPayment(
       data: {
         amountPaid: new Prisma.Decimal(newPaid),
         outstandingAmount: new Prisma.Decimal(newOutstanding),
+        amountInWords: terbilang(newPaid > 0 ? newOutstanding : invoice.grandTotal.toNumber()),
         status,
       },
     });
