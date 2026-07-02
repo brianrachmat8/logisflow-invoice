@@ -4,6 +4,7 @@ import { PageHead } from "@/components/page-head";
 import { StatusBadge } from "@/components/status-badge";
 import { db } from "@/lib/db";
 import { numberValue, rupiah, tanggal } from "@/lib/format";
+import { invoiceDisplayStatus } from "@/lib/invoice-status";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,7 @@ export default async function InvoicesPage() {
         {invoices.map((item) => <tr key={item.id}>
           <td className="primary-cell"><Link href={`/invoices/${item.id}`}><strong>{item.invoiceNumber || item.draftNumber}</strong><span>{item.invoiceNumber ? "Nomor final" : "Nomor sementara"}</span></Link></td>
           <td>{item.client.name}</td><td>{item.shipment.jobNumber}<br/><small style={{ color: "var(--muted)" }}>{item.bill?.number || "Gabungan"}</small></td>
-          <td>{tanggal.format(item.invoiceDate)}</td><td>{item.type}</td><td className="money">{rupiah.format(numberValue(item.grandTotal))}</td><td><StatusBadge status={item.status} /></td>
+          <td>{tanggal.format(item.invoiceDate)}</td><td>{item.type}</td><td className="money">{rupiah.format(numberValue(item.grandTotal))}</td><td><StatusBadge status={invoiceDisplayStatus(item)} /></td>
         </tr>)}
         {!invoices.length && <tr><td colSpan={7} className="empty">Belum ada invoice.</td></tr>}</tbody></table></div>
     </div>
