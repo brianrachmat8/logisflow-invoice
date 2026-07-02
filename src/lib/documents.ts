@@ -198,7 +198,7 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
   const closingGreeting = sanitize(invoice.company.closingGreeting || "Hormat kami");
   if (stampImage) {
     const stampSize = fitImage(stampImage.width, stampImage.height, 128, 76);
-    page.drawImage(stampImage, { x: 390, y: signY - 72, width: stampSize.width, height: stampSize.height });
+    page.drawImage(stampImage, { x: 390, y: signY - 72, width: stampSize.width, height: stampSize.height, opacity: 0.68 });
   }
   drawText(closingGreeting, 420, signY, 11, bold, navy);
   if (signatureImage) {
@@ -364,7 +364,7 @@ function invoiceDocumentMeta(invoice: InvoiceDocument): [string, string][] {
     [invoice.shipment.shipmentDirection === "EXPORT" ? "DO NUMBER (EXPORT)" : "B/L NUMBER (IMPORT)", invoice.shipment.doNumber],
     ["VESSEL / VOYAGE", `${invoice.shipment.vessel} / ${invoice.shipment.voyage}`],
     ["CARRIER", invoice.shipment.carrier?.name || "-"],
-    ["B/L NUMBER (IMPOR)", invoiceBlLabel(invoice)],
+    ["B/L NUMBER", invoiceBlLabel(invoice)],
     ["SIZE 20/40", summarizeContainerSizes(invoice.shipment.containers)],
   ];
 }
@@ -372,7 +372,7 @@ function invoiceDocumentMeta(invoice: InvoiceDocument): [string, string][] {
 function shipmentWorkLabel(invoice: InvoiceDocument) {
   const name = invoice.shipment.vessel?.trim();
   const reference = invoice.shipment.voyage?.trim();
-  if (name && reference) return `${name} / ${reference}`;
+  if (name && reference && reference !== "-") return `${name} / ${reference}`;
   return name || reference || "-";
 }
 
