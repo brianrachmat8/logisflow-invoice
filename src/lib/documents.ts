@@ -118,7 +118,7 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
   if (invoice.client.phone) drawText(`UP: ${invoice.client.phone}`, leftX + 10, panelY - 108, 9, regular, navy);
 
   let metaY = panelY - 22;
-  invoiceDocumentMeta(invoice).slice(0, 6).forEach(([label, value]) => {
+  invoiceDocumentMeta(invoice).slice(0, 5).forEach(([label, value]) => {
     drawText(label, rightX + 18, metaY, 7, bold, navy);
     const rows = wrapText(value, panelW - 36, 8, bold).slice(0, 2);
     rows.forEach((row, index) => drawText(row, rightX + 18, metaY - 10 - index * 9, 8, bold, navy));
@@ -143,6 +143,19 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
     page.drawLine({ start: { x: marginX, y: y - 13 }, end: { x: pageWidth - marginX, y: y - 13 }, thickness: .6, color: line });
     y -= 31;
   });
+
+  if (invoice.shipment.shipmentDirection !== "LAIN_LAIN" && invoice.shipment.containers.length) {
+    const blockTop = Math.min(y - 24, 338);
+    const blockX = marginX - 2;
+    const maxRows = 6;
+    const colWidth = 86;
+    drawText("NO KONTAINER", blockX, blockTop, 7, bold, navy);
+    invoice.shipment.containers.slice(0, 18).forEach((container, index) => {
+      const column = Math.floor(index / maxRows);
+      const row = index % maxRows;
+      drawText(container.number, blockX + column * colWidth, blockTop - 12 - row * 10, 7, regular, navy);
+    });
+  }
 
   const totalsX = 356;
   const totalsValueX = pageWidth - marginX - 18;
@@ -352,7 +365,6 @@ function invoiceDocumentMeta(invoice: InvoiceDocument): [string, string][] {
     ["CARRIER", invoice.shipment.carrier?.name || "-"],
     ["B/L NUMBER (IMPOR)", invoiceBlLabel(invoice)],
     ["SIZE 20/40", summarizeContainerSizes(invoice.shipment.containers)],
-    ["NO KONTAINER", summarizeContainerNumbers(invoice.shipment.containers)],
   ];
 }
 
