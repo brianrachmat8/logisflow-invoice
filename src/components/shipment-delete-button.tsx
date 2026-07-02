@@ -17,6 +17,7 @@ export function ShipmentDeleteButton({
   const router = useRouter();
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const buttonLabel = disabled ? "Terkunci" : "Hapus trial";
 
   async function removeShipment() {
     setMessage("");
@@ -43,10 +44,10 @@ export function ShipmentDeleteButton({
 
   return (
     <div className="inline-action">
-      <button className="btn btn-danger" type="button" onClick={removeShipment} disabled={loading} title={disabled ? lockedReason : "Hapus data trial shipment"}>
-        {loading ? "Menghapus..." : "Hapus trial"}
+      <button className={`btn ${disabled ? "btn-secondary" : "btn-danger"}`} type="button" onClick={removeShipment} disabled={loading} title={disabled ? lockedReason : "Hapus data trial shipment"}>
+        {loading ? "Menghapus..." : buttonLabel}
       </button>
-      {message && <small style={{ color: "var(--danger)", display: "block", marginTop: 6, maxWidth: 240 }}>{message}</small>}
+      {message && <small style={{ color: disabled ? "var(--muted)" : "var(--danger)", display: "block", marginTop: 6, maxWidth: 260 }}>{message}</small>}
     </div>
   );
 }
