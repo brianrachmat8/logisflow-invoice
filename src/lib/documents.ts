@@ -60,6 +60,8 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   const logoImage = await embedPdfImage(pdf, invoice.company.logoPath);
   const signatureImage = await embedPdfImage(pdf, invoice.company.signaturePath);
+  const stampSetting = await db.appSetting.findUnique({ where: { key: companyStampKey(invoice.companyId) } });
+  const stampImage = await embedPdfImage(pdf, stampSetting?.value);
   const navy = rgb(0.06, 0.11, 0.31);
   const red = rgb(0.86, 0.07, 0.14);
   const line = rgb(0.66, 0.7, 0.8);
@@ -115,12 +117,15 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
   if (invoice.client.email) drawText(`Email: ${invoice.client.email}`, leftX + 10, panelY - 94, 9, regular, navy);
   if (invoice.client.phone) drawText(`UP: ${invoice.client.phone}`, leftX + 10, panelY - 108, 9, regular, navy);
 
-  invoiceDocumentMeta(invoice).slice(0, 6).forEach(([label, value], index) => {
-    const rowY = panelY - 24 - index * 18;
-    drawText(`${label}: ${value}`.slice(0, 46), rightX + 18, rowY, index >= 4 ? 10 : 9, bold, navy);
+  let metaY = panelY - 22;
+  invoiceDocumentMeta(invoice).slice(0, 6).forEach(([label, value]) => {
+    drawText(label, rightX + 18, metaY, 7, bold, navy);
+    const rows = wrapText(value, panelW - 36, 8, bold).slice(0, 2);
+    rows.forEach((row, index) => drawText(row, rightX + 18, metaY - 10 - index * 9, 8, bold, navy));
+    metaY -= rows.length > 1 ? 28 : 22;
   });
 
-  const tableTop = 520;
+  const tableTop = 500;
   page.drawRectangle({ x: marginX, y: tableTop, width: contentWidth, height: 18, color: navy });
   drawText("Deskripsi", marginX + 10, tableTop + 4, 11, bold, white);
   drawText("Harga", 365, tableTop + 4, 11, bold, white);
@@ -176,16 +181,20 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
     drawText("Belum ada rekening pembayaran.", marginX, payY - 24, 10, regular, navy);
   }
 
-  const signY = Math.max(payY - 30, 72);
+  const signY = Math.max(payY - 78, 58);
   drawText(sanitize(invoice.company.closingGreeting || "Hormat kami"), 420, signY, 11, bold, navy);
+  if (stampImage) {
+    const stampSize = fitImage(stampImage.width, stampImage.height, 128, 76);
+    page.drawImage(stampImage, { x: 390, y: signY - 72, width: stampSize.width, height: stampSize.height });
+  }
   if (signatureImage) {
     const signatureSize = fitImage(signatureImage.width, signatureImage.height, 112, 42);
-    page.drawImage(signatureImage, { x: 398, y: signY - 48, width: signatureSize.width, height: signatureSize.height });
+    page.drawImage(signatureImage, { x: 402, y: signY - 50, width: signatureSize.width, height: signatureSize.height });
   }
-  drawText(sanitize(invoice.company.signerName || invoice.company.name), 390, signY - 60, 10, bold, navy);
-  if (invoice.company.signerTitle) drawText(sanitize(invoice.company.signerTitle), 390, signY - 74, 9, regular, navy);
+  drawText(sanitize(invoice.company.signerName || invoice.company.name), 390, signY - 82, 10, bold, navy);
+  if (invoice.company.signerTitle) drawText(sanitize(invoice.company.signerTitle), 390, signY - 96, 9, regular, navy);
 
-  drawText("Thank you!", marginX - 6, 20, 24, bold, red);
+  drawText("Thank you!", marginX - 6, 12, 24, bold, red);
 
   const bytes = await pdf.save();
   await fs.writeFile(filePath, bytes);
@@ -321,6 +330,10 @@ async function embedPdfImage(pdf: PDFDocument, filePath?: string | null) {
 function fitImage(width: number, height: number, maxWidth: number, maxHeight: number) {
   const scale = Math.min(maxWidth / width, maxHeight / height);
   return { width: width * scale, height: height * scale };
+}
+
+function companyStampKey(companyId: string) {
+  return `company:${companyId}:stampPath`;
 }
 
 function invoiceDocumentMeta(invoice: InvoiceDocument): [string, string][] {
