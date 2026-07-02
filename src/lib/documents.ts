@@ -118,7 +118,7 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
   if (invoice.client.phone) drawText(`UP: ${invoice.client.phone}`, leftX + 10, panelY - 108, 9, regular, navy);
 
   let metaY = panelY - 22;
-  invoiceDocumentMeta(invoice).slice(0, 6).forEach(([label, value]) => {
+  invoiceDocumentMeta(invoice).slice(0, 5).forEach(([label, value]) => {
     drawText(label, rightX + 18, metaY, 7, bold, navy);
     const rows = wrapText(value, panelW - 36, 8, bold).slice(0, 2);
     rows.forEach((row, index) => drawText(row, rightX + 18, metaY - 10 - index * 9, 8, bold, navy));
@@ -143,6 +143,19 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
     page.drawLine({ start: { x: marginX, y: y - 13 }, end: { x: pageWidth - marginX, y: y - 13 }, thickness: .6, color: line });
     y -= 31;
   });
+
+  if (invoice.shipment.shipmentDirection !== "LAIN_LAIN" && invoice.shipment.containers.length) {
+    const blockTop = Math.min(y - 24, 338);
+    const blockX = marginX - 2;
+    const maxRows = 6;
+    const colWidth = 86;
+    drawText("NO KONTAINER", blockX, blockTop, 7, bold, navy);
+    invoice.shipment.containers.slice(0, 18).forEach((container, index) => {
+      const column = Math.floor(index / maxRows);
+      const row = index % maxRows;
+      drawText(container.number, blockX + column * colWidth, blockTop - 12 - row * 10, 7, regular, navy);
+    });
+  }
 
   const totalsX = 356;
   const totalsValueX = pageWidth - marginX - 18;
@@ -182,11 +195,12 @@ async function buildPdf(invoice: InvoiceDocument, filePath: string) {
   }
 
   const signY = Math.max(payY - 60, 126);
-  drawText(sanitize(invoice.company.closingGreeting || "Hormat kami"), 420, signY, 11, bold, navy);
+  const closingGreeting = sanitize(invoice.company.closingGreeting || "Hormat kami");
   if (stampImage) {
     const stampSize = fitImage(stampImage.width, stampImage.height, 128, 76);
     page.drawImage(stampImage, { x: 390, y: signY - 72, width: stampSize.width, height: stampSize.height });
   }
+  drawText(closingGreeting, 420, signY, 11, bold, navy);
   if (signatureImage) {
     const signatureSize = fitImage(signatureImage.width, signatureImage.height, 112, 42);
     page.drawImage(signatureImage, { x: 402, y: signY - 50, width: signatureSize.width, height: signatureSize.height });
@@ -352,7 +366,6 @@ function invoiceDocumentMeta(invoice: InvoiceDocument): [string, string][] {
     ["CARRIER", invoice.shipment.carrier?.name || "-"],
     ["B/L NUMBER (IMPOR)", invoiceBlLabel(invoice)],
     ["SIZE 20/40", summarizeContainerSizes(invoice.shipment.containers)],
-    ["NO KONTAINER", summarizeContainerNumbers(invoice.shipment.containers)],
   ];
 }
 
